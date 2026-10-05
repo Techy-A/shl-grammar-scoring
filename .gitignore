@@ -11,3 +11,4 @@
 !/kaggle/jobs/
 /kaggle/jobs/*.log
 /kaggle/jobs/*/out/
+!/submissions/
