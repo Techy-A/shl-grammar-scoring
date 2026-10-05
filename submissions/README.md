@@ -9,6 +9,10 @@ Lower is better; the public leaderboard behaves like MAE.
 | `02_blend_v2_rounded.csv` | 56860724 | v1 + SVR on WavLM and on WavLM+DeBERTa | yes | 0.335* | 0.3678 |
 | `03_blend_v2.csv` | 56860768 | v1 + SVR on WavLM and on WavLM+DeBERTa | no | 0.349 | **0.3454** |
 | `04_blend_v1_rounded.csv` | 56860770 | v1 | yes | 0.351* | 0.3654 |
+| `05_blend_v3.csv` | 56862170 | v2 + SVR on WavLM-large, SVR on WavLM-large+Whisper+DeBERTa, Whisper Ridge, all-audio SVR | no | **0.340** | 0.3550 |
 
 \* Rounding improves CV MAE (train labels sit on a 0.5 grid) but made the public score about 0.02
 worse in both paired submissions, so the test labels are probably not on the grid. Rounding was dropped.
+
+v3 has the best CV MAE but a worse public score than v2. With 216 public clips the score's standard error
+is about 0.02, so public differences this size are mostly noise; the private leaderboard decides.
