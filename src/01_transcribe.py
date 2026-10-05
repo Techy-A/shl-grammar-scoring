@@ -9,7 +9,7 @@ repetitions, wrong verb forms), which pushes the decoder toward literal transcri
 
 Besides the text, we also record ASR confidence features:
   * token log-probabilities: low values often mean unclear or non-fluent speech
-  * no-speech probability: high values flag silent / unusable clips (likely the score-0 ones)
+  * no-speech probability: high values flag silent / unusable clips
 
 Output: artifacts/transcripts_<tag>.parquet, one row per clip.
 

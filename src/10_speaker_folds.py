@@ -2,10 +2,10 @@
 
 Why: train clips come in speaker "twins" (same voice, similar score), and with random folds ~80% of
 validation clips had a twin in the training folds. Test clips are clearly farther from train (median
-nearest-train speaker similarity 0.87 vs 0.92 train->train). So random-fold CV rewarded models that
-recognise voices, which is why CV gains (e.g. SVR on audio embeddings) didn't carry over to the
-leaderboard. (Checked afterwards: under grouped CV the blends still rank v3 > v2 > v1, while the public
-leaderboard had v2 > v1 > v3, so the leak doesn't explain that disagreement; public noise does.)
+nearest-train speaker similarity 0.87 vs 0.92 train->train). So random-fold CV was optimistic, most
+of all for audio models that can recognise voices (WavLM SVR: MAE 0.397 random vs 0.448 grouped;
+text models barely move). It does NOT explain why v3 beat v2 on CV but lost on the public
+leaderboard: grouped CV still ranks v3 > v2 > v1, so that gap is most likely public-score noise.
 
 How: a speaker-verification model (WavLM-base-plus-SV) embeds the first 15 s of every clip (same
 length for all, so the shorter test clips compare fairly). Train clips are clustered (average-linkage
