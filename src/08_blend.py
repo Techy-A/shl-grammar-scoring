@@ -1,6 +1,7 @@
 """Step 8: score-0 gate + non-negative blend of out-of-fold predictions -> submission.csv.
 
-* Gate: score-0 clips (silent / unusable) are acoustically obvious. Frozen WavLM + Ridge predicts
+* Gate: score-0 clips are acoustically distinct (most contain ordinary speech, so it's probably the
+  recording conditions, not the grammar). Frozen WavLM + Ridge predicts
   them almost perfectly, while the text models miss them by 1.5-2 points. So any clip whose
   WavLM prediction is below GATE is set to 0. The text models never get a vote on those clips.
 * Blend: the remaining clips get intercept + non-negative weights over the models' predictions.
@@ -8,8 +9,9 @@
 * No rounding: train labels sit on a 0.5 grid and snapping to it cut CV MAE by 0.02, but it made
   the public leaderboard 0.02 *worse* in two paired submissions, so test labels are probably not on
   the grid (e.g. averaged raters). The leaderboard tracks CV MAE (public 0.346 vs CV MAE 0.370).
-* Honest score: the blend weights are fitted in a second CV over fold_s1. The base OOFs came from
-  fold_s0 (and s0-s2 for 03_train.py), so there's a small optimism shared by every stacking setup.
+* Honest score: the blend weights are fitted in a second CV over gfold_s1 (speaker-grouped, like the
+  base models' folds; see 10_speaker_folds.py). Fold seeds differ, so there's a small optimism shared
+  by every stacking setup.
 
 Usage: python src/08_blend.py s1_lgbm_prompt s2_ridge_deberta s3_ridge_wavlm s4_deberta_ft
        (the gate always uses s3_ridge_wavlm, which must be in the list)
@@ -39,7 +41,7 @@ def blend(names):
     gated = (P[GATE_MODEL] < GATE).values
     is_tr = (ids.reset_index().split == "train").values
     y = ids.label.values
-    folds = pd.read_csv(ART / "folds.csv").set_index("filename").fold_s1.loc[ids.index.get_level_values(0)[is_tr]].values
+    folds = pd.read_csv(ART / "folds.csv").set_index("filename").gfold_s1.loc[ids.index.get_level_values(0)[is_tr]].values
 
     # ---- CV of the blend itself (fold_s1) ----
     X, oof = P.values, np.zeros(is_tr.sum())

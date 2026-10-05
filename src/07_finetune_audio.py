@@ -10,7 +10,7 @@ Design choices:
 * Training on random 15 s crops: augmentation (a new crop every epoch) and test-like lengths
   (test clips are shorter than train clips).
 * Prediction = average over consecutive 15 s windows of the whole clip, weighted by window length.
-* Fixed epochs and fold_s0 from artifacts/folds.csv, same as 06_finetune_text.py, so the OOF can be blended.
+* Fixed epochs and gfold_s0 from artifacts/folds.csv, same as 06_finetune_text.py, so the OOF can be blended.
 
   train : python src/07_finetune_audio.py --folds 0 1 2     -> artifacts/s4b_fold{k}.parquet
   merge : python src/07_finetune_audio.py --merge           -> artifacts/pred_<name>.parquet + results row
@@ -92,7 +92,7 @@ def main():
 
     df = pd.concat([pd.read_csv(DATA / "train.csv").assign(split="train"),
                     pd.read_csv(DATA / "test.csv").assign(split="test")], ignore_index=True)
-    folds = df[["filename"]].merge(pd.read_csv(ART / "folds.csv"), how="left")["fold_s0"].fillna(-1).values
+    folds = df[["filename"]].merge(pd.read_csv(ART / "folds.csv"), how="left")["gfold_s0"].fillna(-1).values
     # All audio in RAM (~3.8 GB float32): avoids re-reading WAVs every epoch.
     wavs = [sf.read(DATA / r.split / r.filename, dtype="float32")[0] for r in df.itertuples()]
 

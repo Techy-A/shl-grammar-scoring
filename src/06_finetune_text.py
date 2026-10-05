@@ -7,7 +7,7 @@ Design choices (small data: about 615 training texts per fold):
 * Mean-pooled last hidden state -> linear head, MSE loss on label / 5 (targets in [0, 1]).
 * A fixed number of epochs, no early stopping on the validation fold, so the OOF predictions stay
   honest and can be blended with the other steps' OOF in 08_blend.py.
-* Folds = fold_s0 from artifacts/folds.csv (the folds every other step uses).
+* Folds = gfold_s0 from artifacts/folds.csv (speaker-grouped, like every other step).
 * Separate learning rates: small for the pretrained body, larger for the freshly initialised head.
 
 Two modes:
@@ -70,7 +70,7 @@ def main():
         return merge_folds("s4", NAME, MODEL)
 
     df = pd.read_parquet(ART / f"transcripts_{TAG}.parquet")
-    folds = df[["filename"]].merge(pd.read_csv(ART / "folds.csv"), how="left")["fold_s0"].fillna(-1).values
+    folds = df[["filename"]].merge(pd.read_csv(ART / "folds.csv"), how="left")["gfold_s0"].fillna(-1).values
     t = AutoTokenizer.from_pretrained(MODEL)(df.text.tolist(), padding="max_length", truncation=True,
                                              max_length=MAX_LEN, return_tensors="pt")
     enc = {"input_ids": t.input_ids, "attention_mask": t.attention_mask}   # DeBERTa-v3 ignores token_type_ids

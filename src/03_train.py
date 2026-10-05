@@ -1,6 +1,7 @@
 """Step 3: cross-validated models (mean baseline, LightGBM, Ridge) on cached feature tables.
 
-* Same folds for every model (artifacts/folds.csv: 5 folds x 3 seeds, stratified by label),
+* Same folds for every model (artifacts/folds.csv: 5 folds x 3 seeds, stratified by label and
+  grouped by speaker, see 10_speaker_folds.py),
   so out-of-fold (OOF) predictions from different steps can be blended later without leakage.
 * Each run appends one line to artifacts/results.csv (the results table for the report) and
   saves OOF + test predictions to artifacts/pred_<name>.parquet for the blend (08_blend.py).
@@ -93,7 +94,7 @@ def main():
     test_pred = np.zeros(len(test))
     for s in SEEDS:
         for k in range(N_FOLDS):
-            tr_idx = folds[f"fold_s{s}"].values != k
+            tr_idx = folds[f"gfold_s{s}"].values != k   # speaker-grouped folds (10_speaker_folds.py)
             va_idx = ~tr_idx
             p_va, p_te = fit_predict(args.model, train.loc[tr_idx, feat_cols], y[tr_idx],
                                      [train.loc[va_idx, feat_cols], test[feat_cols]], seed=s)
