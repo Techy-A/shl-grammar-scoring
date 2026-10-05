@@ -22,7 +22,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import nnls
 
-from common import ART
+from common import ART, fold_of
 
 GATE_MODEL, GATE = "s3_ridge_wavlm", 0.5   # train 0-clips: WavLM max 0.40; lowest non-zero clip sits far above
 
@@ -41,7 +41,7 @@ def blend(names):
     gated = (P[GATE_MODEL] < GATE).values
     is_tr = (ids.reset_index().split == "train").values
     y = ids.label.values
-    folds = pd.read_csv(ART / "folds.csv").set_index("filename").gfold_s1.loc[ids.index.get_level_values(0)[is_tr]].values
+    folds = fold_of(ids.index.get_level_values(0)[is_tr], "gfold_s1")
 
     # ---- CV of the blend itself (fold_s1) ----
     X, oof = P.values, np.zeros(is_tr.sum())

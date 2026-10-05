@@ -5,15 +5,17 @@ validation clips had a twin in the training folds. Test clips are clearly farthe
 nearest-train speaker similarity 0.87 vs 0.92 train->train). So random-fold CV was optimistic, most
 of all for audio models that can recognise voices (WavLM SVR: MAE 0.397 random vs 0.448 grouped;
 text models barely move). It does NOT explain why v3 beat v2 on CV but lost on the public
-leaderboard: grouped CV still ranks v3 > v2 > v1, so that gap is most likely public-score noise.
+leaderboard: grouped CV still ranks v3 > v2 > v1. A paired comparison (both scored on the same
+216 clips) puts that gap at about one standard error or more, so it's probably a real difference
+that this CV doesn't capture, e.g. clip length (70% of test clips are <= 55 s vs 25% of train).
 
 How: a speaker-verification model (WavLM-base-plus-SV) embeds the first 15 s of every clip (same
 length for all, so the shorter test clips compare fairly). Train clips are clustered (average-linkage
 cosine distance < 0.12); each cluster stays inside one fold. The 0.12 threshold makes validation
 clips exactly as far from their training folds as test clips are from train (median 0.870 vs 0.87).
 
-Output: adds gfold_s0..gfold_s2 (5 folds x 3 seeds, stratified by label, grouped by speaker
-cluster) to artifacts/folds.csv; the original random fold_s* columns are kept for reference.
+Output: artifacts/folds.csv with gfold_s0..gfold_s2 (5 folds x 3 seeds, stratified by label,
+grouped by speaker cluster). Every later step reads its folds from here.
 Usage : python src/10_speaker_folds.py
 """
 import numpy as np
@@ -51,10 +53,11 @@ def main():
     # Give each its own group instead.
     zero = (train.label == 0).values
     groups[zero] = groups.max() + 1 + np.arange(zero.sum())
-    # Same stratification as the random folds (03_train.py): rare 1.0/1.5 labels merged into 2.0.
+    # Stratify on the label as a string (2.5 and 3.0 are separate classes); the very rare 1.0/1.5
+    # labels are merged into 2.0 so every class has at least 5 members.
     strat = train.label.clip(lower=2.0).where(train.label > 0, 0).astype(str)
 
-    folds = pd.read_csv(ART / "folds.csv").set_index("filename").loc[train.filename].reset_index()
+    folds = pd.DataFrame({"filename": train.filename})
     for s in range(3):
         folds[f"gfold_s{s}"] = -1
         for k, (_, va) in enumerate(StratifiedGroupKFold(5, shuffle=True, random_state=s).split(E, strat, groups)):

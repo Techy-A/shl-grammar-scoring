@@ -23,7 +23,7 @@ import torch
 from torch import nn
 from transformers import AutoModel, AutoTokenizer
 
-from common import AMP, ART, finetune_fold, merge_folds
+from common import AMP, ART, finetune_fold, fold_of, merge_folds
 
 MODEL, TAG, NAME = "microsoft/deberta-v3-large", "prompt", "s4_deberta_ft"
 EPOCHS, LR, BS, MAX_LEN = 4, 1e-5, 8, 256
@@ -70,7 +70,7 @@ def main():
         return merge_folds("s4", NAME, MODEL)
 
     df = pd.read_parquet(ART / f"transcripts_{TAG}.parquet")
-    folds = df[["filename"]].merge(pd.read_csv(ART / "folds.csv"), how="left")["gfold_s0"].fillna(-1).values
+    folds = fold_of(df.filename, "gfold_s0")
     t = AutoTokenizer.from_pretrained(MODEL)(df.text.tolist(), padding="max_length", truncation=True,
                                              max_length=MAX_LEN, return_tensors="pt")
     enc = {"input_ids": t.input_ids, "attention_mask": t.attention_mask}   # DeBERTa-v3 ignores token_type_ids

@@ -17,32 +17,14 @@ import lightgbm as lgb
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import RidgeCV
-from sklearn.model_selection import StratifiedKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
 
-from common import ART
+from common import ART, fold_of
 
 SEEDS, N_FOLDS = [0, 1, 2], 5
 ID_COLS = ["filename", "split", "label"]
-
-
-def get_folds(train):
-    """Create the shared fold table once, then always reuse it."""
-    path = ART / "folds.csv"
-    if path.exists():
-        return pd.read_csv(path)
-    folds = pd.DataFrame({"filename": train.filename})
-    # Stratify on the label (as a string, so 2.5 and 3.0 are separate classes); the very rare
-    # 1.0/1.5 labels are merged into 2.0 so every class has at least N_FOLDS members.
-    strat = train.label.clip(lower=2.0).where(train.label > 0, 0).astype(str)
-    for s in SEEDS:
-        folds[f"fold_s{s}"] = -1
-        for k, (_, va) in enumerate(StratifiedKFold(N_FOLDS, shuffle=True, random_state=s).split(train, strat)):
-            folds.loc[va, f"fold_s{s}"] = k
-    folds.to_csv(path, index=False)
-    return folds
 
 
 def fit_predict(model, X_tr, y_tr, X_ev, seed):
@@ -86,7 +68,6 @@ def main():
     train = df[df.split == "train"].reset_index(drop=True)
     test = df[df.split == "test"].reset_index(drop=True)
     feat_cols = [c for c in df.columns if c not in ID_COLS]
-    folds = get_folds(train).set_index("filename").loc[train.filename].reset_index()
 
     # ---- CV: average OOF over seeds; test prediction = mean over all fold models ----
     y = train.label.values
@@ -94,7 +75,7 @@ def main():
     test_pred = np.zeros(len(test))
     for s in SEEDS:
         for k in range(N_FOLDS):
-            tr_idx = folds[f"gfold_s{s}"].values != k   # speaker-grouped folds (10_speaker_folds.py)
+            tr_idx = fold_of(train.filename, f"gfold_s{s}") != k   # speaker-grouped (10_speaker_folds.py)
             va_idx = ~tr_idx
             p_va, p_te = fit_predict(args.model, train.loc[tr_idx, feat_cols], y[tr_idx],
                                      [train.loc[va_idx, feat_cols], test[feat_cols]], seed=s)

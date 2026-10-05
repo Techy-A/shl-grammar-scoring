@@ -24,7 +24,7 @@ import torch
 from torch import nn
 from transformers import WavLMModel
 
-from common import AMP, ART, DATA, SR, finetune_fold, merge_folds
+from common import AMP, DATA, SR, finetune_fold, fold_of, merge_folds
 
 CROP = 15 * SR
 MODEL, NAME = "microsoft/wavlm-base-plus", "s4b_wavlm_ft"
@@ -92,7 +92,7 @@ def main():
 
     df = pd.concat([pd.read_csv(DATA / "train.csv").assign(split="train"),
                     pd.read_csv(DATA / "test.csv").assign(split="test")], ignore_index=True)
-    folds = df[["filename"]].merge(pd.read_csv(ART / "folds.csv"), how="left")["gfold_s0"].fillna(-1).values
+    folds = fold_of(df.filename, "gfold_s0")
     # All audio in RAM (~3.8 GB float32): avoids re-reading WAVs every epoch.
     wavs = [sf.read(DATA / r.split / r.filename, dtype="float32")[0] for r in df.itertuples()]
 

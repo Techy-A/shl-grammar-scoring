@@ -82,6 +82,13 @@ def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix
                   "pred": predict(model, idx)}).to_parquet(ART / f"{prefix}_fold{k}.parquet", index=False)
 
 
+def fold_of(filenames, col):
+    """Fold number of each clip in artifacts/folds.csv column col (written by 10_speaker_folds.py).
+    folds.csv lists train clips only; other names get -1. Test rows can share a train filename and
+    then get that clip's fold, so callers select rows by split as well (they all do)."""
+    return pd.read_csv(ART / "folds.csv").set_index("filename")[col].reindex(filenames).fillna(-1).astype(int).values
+
+
 def merge_folds(prefix, name, desc):
     """Combine per-fold outputs of a fine-tuning run (artifacts/<prefix>_fold{k}.parquet).
 

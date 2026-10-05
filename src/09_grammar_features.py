@@ -10,11 +10,13 @@ audio ones on a *grammar* score. These three small pretrained models measure gra
 All are rates or means, so they don't depend on clip length (test clips are shorter).
 Silent clips (no sentences) get the column median; the score-0 gate in 08_blend.py handles them.
 
-Input : artifacts/transcripts_<tag>.parquet
-Output: artifacts/feat_grammar_<tag>.parquet (filename, split, label, g_*)
-Usage : python src/09_grammar_features.py --tag prompt
+Result: the features correlate with the score (acceptability r=0.54 on non-zero clips) but add
+nothing to the blend (CV MAE 0.3400 vs 0.3399): the audio and DeBERTa models already carry it.
+
+Input : artifacts/transcripts_prompt.parquet
+Output: artifacts/feat_grammar_prompt.parquet (filename, split, label, g_*)
+Usage : python src/09_grammar_features.py
 """
-import argparse
 import difflib
 import re
 
@@ -36,33 +38,28 @@ def sentences(text):
     return [s for s in re.split(r"(?<=[.?!])\s+", text or "") if len(s.split()) >= 3]
 
 
-def edit_rate(src, fixed):
-    a, b = src.lower().split(), fixed.lower().split()
-    return 1 - difflib.SequenceMatcher(None, a, b).ratio()
-
-
 @torch.inference_mode()
-def run_gec(sents):
-    tok = AutoTokenizer.from_pretrained(GEC)
-    model = AutoModelForSeq2SeqLM.from_pretrained(GEC, dtype=DTYPE).to("cuda").eval()
+def batched(name, model_cls, texts, fn):
+    """Load a model and apply fn(model, tok, encoded batch) -> list to texts in batches of BS."""
+    tok = AutoTokenizer.from_pretrained(name)
+    model = model_cls.from_pretrained(name, dtype=DTYPE).to("cuda").eval()
     out = []
-    for i in tqdm(range(0, len(sents), BS), desc="gec"):
-        enc = tok(["grammar: " + s for s in sents[i:i + BS]], padding=True, truncation=True,
-                  max_length=128, return_tensors="pt").to("cuda")
-        gen = model.generate(**enc, max_new_tokens=128, num_beams=1)
-        out += tok.batch_decode(gen, skip_special_tokens=True)
-    return [edit_rate(s, f) for s, f in zip(sents, out)]
-
-
-@torch.inference_mode()
-def run_cola(sents):
-    tok = AutoTokenizer.from_pretrained(COLA)
-    model = AutoModelForSequenceClassification.from_pretrained(COLA, dtype=DTYPE).to("cuda").eval()
-    out = []
-    for i in tqdm(range(0, len(sents), BS), desc="cola"):
-        enc = tok(sents[i:i + BS], padding=True, truncation=True, max_length=128, return_tensors="pt").to("cuda")
-        out += model(**enc).logits.float().softmax(-1)[:, 1].tolist()   # label 1 = acceptable
+    for i in tqdm(range(0, len(texts), BS), desc=name):
+        enc = tok(texts[i:i + BS], padding=True, truncation=True, max_length=128, return_tensors="pt").to("cuda")
+        out += fn(model, tok, enc)
     return out
+
+
+def run_gec(sents):
+    fixed = batched(GEC, AutoModelForSeq2SeqLM, ["grammar: " + s for s in sents], lambda m, tok, enc:
+                    tok.batch_decode(m.generate(**enc, max_new_tokens=128, num_beams=1), skip_special_tokens=True))
+    # Share of words changed (word-level, so punctuation-only fixes barely count).
+    return [1 - difflib.SequenceMatcher(None, s.lower().split(), f.lower().split()).ratio() for s, f in zip(sents, fixed)]
+
+
+def run_cola(sents):   # P(acceptable): label 1
+    return batched(COLA, AutoModelForSequenceClassification, sents,
+                   lambda m, tok, enc: m(**enc).logits.float().softmax(-1)[:, 1].tolist())
 
 
 @torch.inference_mode()
@@ -77,11 +74,7 @@ def run_lm(texts):
 
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--tag", default="prompt", help="which transcripts_<tag>.parquet to use")
-    args = ap.parse_args()
-
-    tr = pd.read_parquet(ART / f"transcripts_{args.tag}.parquet")
+    tr = pd.read_parquet(ART / "transcripts_prompt.parquet")
     per_clip = [sentences(t) for t in tr.text]
     flat = [s for ss in per_clip for s in ss]
     owner = np.repeat(np.arange(len(tr)), [len(ss) for ss in per_clip])   # clip index of each sentence
@@ -95,7 +88,7 @@ def main():
     feats = feats.fillna(feats.median())
 
     out = pd.concat([tr[["filename", "split", "label"]], feats.reset_index(drop=True)], axis=1)
-    out.to_parquet(ART / f"feat_grammar_{args.tag}.parquet", index=False)
+    out.to_parquet(ART / "feat_grammar_prompt.parquet", index=False)
     print(out.drop(columns=["filename", "split"]).corr(numeric_only=True)["label"].round(3).sort_values())
 
 
