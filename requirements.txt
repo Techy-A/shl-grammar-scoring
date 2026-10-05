@@ -1,0 +1,13 @@
+# Local GPU env (Python 3.12). torch: install the CUDA build matching your driver,
+# e.g. pip install torch --index-url https://download.pytorch.org/whl/cu126
+torch==2.14.1
+transformers==5.18.0
+numpy==2.5.3
+pandas==3.0.6
+pyarrow==25.0.1
+scikit-learn==1.9.1
+scipy==1.18.1
+lightgbm==4.7.0
+soundfile==0.14.0
+tqdm==4.70.1
+kaggle==2.2.4

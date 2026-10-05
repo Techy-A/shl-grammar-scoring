@@ -1,0 +1,13 @@
+# Whitelist: publish code only (no data, artifacts, logs, notes or local tooling).
+/*
+!/.gitignore
+!/README.md
+!/requirements.txt
+!/src/
+/src/__pycache__/
+!/kaggle/
+/kaggle/*
+!/kaggle/run_job.sh
+!/kaggle/jobs/
+/kaggle/jobs/*.log
+/kaggle/jobs/*/out/

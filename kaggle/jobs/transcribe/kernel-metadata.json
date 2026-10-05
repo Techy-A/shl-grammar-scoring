@@ -1,0 +1,12 @@
+{
+  "id": "aryanawasthiteykik/shl-transcribe",
+  "title": "shl-transcribe",
+  "code_file": "run.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "competition_sources": ["shl-hiring-assessment-2026"],
+  "dataset_sources": ["aryanawasthiteykik/shl-src"]
+}
