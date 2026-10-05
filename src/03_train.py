@@ -10,6 +10,12 @@ Usage:
   python src/03_train.py --name s0_mean --model mean --feats feat_text_prompt
   python src/03_train.py --name s1_lgbm --model lgbm --feats feat_text_prompt
   python src/03_train.py --name s2_ridge --model ridge --feats feat_emb_deberta-v3-large_prompt
+  python src/03_train.py --name c3_ridge_wavlm --model ridge --feats feat_wavlm-base-plus --crops
+
+--crops (length-bias fix, see 05_audio_embed.py): also train on the test-length crops of the train
+clips, and score each validation clip by its crops, so CV measures test-like lengths. Tables
+without a _crops file (text features: transcripts of the crops don't exist) reuse the full-clip
+row for every crop.
 """
 import argparse
 
@@ -21,7 +27,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
 
-from common import ART, fold_of
+from common import ART, N_CROPS, fold_of
 
 SEEDS, N_FOLDS = [0, 1, 2], 5
 ID_COLS = ["filename", "split", "label"]
@@ -57,29 +63,43 @@ def main():
     ap.add_argument("--name", required=True, help="run name, used for output files and the results table")
     ap.add_argument("--model", choices=["mean", "lgbm", "ridge", "svr"], required=True)
     ap.add_argument("--feats", nargs="+", required=True, help="artifacts/<name>.parquet tables, merged on filename")
+    ap.add_argument("--crops", action="store_true", help="train/validate on test-length crops too")
     args = ap.parse_args()
 
     # ---- Load and merge feature tables (ids/label taken from the first one) ----
-    df = pd.read_parquet(ART / f"{args.feats[0]}.parquet")
+    def load(f):
+        d = pd.read_parquet(ART / f"{f}.parquet")
+        if not args.crops:
+            return d
+        crops = ART / f"{f}_crops.parquet"
+        extra = ([pd.read_parquet(crops)] if crops.exists() else
+                 [d[d.split == "train"].assign(split=f"crop{i}") for i in range(N_CROPS)])
+        return pd.concat([d, *extra], ignore_index=True)
+
+    df = load(args.feats[0])
     for f in args.feats[1:]:
         # Train and test reuse filenames, so the key must include the split.
-        df = df.merge(pd.read_parquet(ART / f"{f}.parquet").drop(columns=["label"], errors="ignore"),
-                      on=["filename", "split"])
+        df = df.merge(load(f).drop(columns=["label"], errors="ignore"), on=["filename", "split"])
     train = df[df.split == "train"].reset_index(drop=True)
     test = df[df.split == "test"].reset_index(drop=True)
+    crop = df[df.split.str.startswith("crop")].reset_index(drop=True)   # empty without --crops
+    fit_rows = pd.concat([train, crop], ignore_index=True)
     feat_cols = [c for c in df.columns if c not in ID_COLS]
 
     # ---- CV: average OOF over seeds; test prediction = mean over all fold models ----
     y = train.label.values
     oof = np.zeros(len(train))
     test_pred = np.zeros(len(test))
+    # Validation rows: the full clips, or with --crops their test-length crops (averaged per clip).
+    val = crop if args.crops else train
     for s in SEEDS:
         for k in range(N_FOLDS):
-            tr_idx = fold_of(train.filename, f"gfold_s{s}") != k   # speaker-grouped (10_speaker_folds.py)
-            va_idx = ~tr_idx
-            p_va, p_te = fit_predict(args.model, train.loc[tr_idx, feat_cols], y[tr_idx],
-                                     [train.loc[va_idx, feat_cols], test[feat_cols]], seed=s)
-            oof[va_idx] += p_va / len(SEEDS)
+            fit_m = fold_of(fit_rows.filename, f"gfold_s{s}") != k   # speaker-grouped (10_speaker_folds.py)
+            va_m = fold_of(val.filename, f"gfold_s{s}") == k
+            p_va, p_te = fit_predict(args.model, fit_rows.loc[fit_m, feat_cols], fit_rows.label.values[fit_m],
+                                     [val.loc[va_m, feat_cols], test[feat_cols]], seed=s)
+            per_clip = pd.Series(p_va, index=val.filename[va_m]).groupby(level=0).mean()
+            oof += per_clip.reindex(train.filename).fillna(0).values / len(SEEDS)
             test_pred += p_te / (len(SEEDS) * N_FOLDS)
 
     # Scores are bounded to [0, 5], so clipping can only reduce the error.

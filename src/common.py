@@ -32,6 +32,7 @@ else:
 ART.mkdir(parents=True, exist_ok=True)
 
 SR = 16000   # all clips are 16 kHz mono (checked during EDA)
+N_CROPS = 2  # test-length crops per train clip (05_audio_embed.py --crops, 03_train.py --crops)
 
 # fp16 halves memory and is much faster on the Kaggle T4, but GTX 16xx cards (the local
 # GTX 1650) produce NaNs in fp16 (verified: Whisper's encoder output was all NaN), so they use fp32.
