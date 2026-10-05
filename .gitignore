@@ -12,3 +12,4 @@
 /kaggle/jobs/*.log
 /kaggle/jobs/*/out/
 !/submissions/
+!/aryan_awasthi.csv
