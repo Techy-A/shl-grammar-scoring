@@ -15,12 +15,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
+from torch import nn
+from transformers import get_linear_schedule_with_warmup
 
 ON_KAGGLE = Path("/kaggle/input").exists()
 
 if ON_KAGGLE:
     # Competition data is mounted read-only; outputs must go to /kaggle/working to be downloadable.
-    DATA = Path("/kaggle/input/competitions/shl-hiring-assessment-2026/Dataset_Final")
+    # The mount path differs between kernels (/kaggle/input/competitions/<slug>/... or /kaggle/input/<slug>/...).
+    DATA = next(Path("/kaggle/input").glob("**/Dataset_Final"))
     ART = Path("/kaggle/working/artifacts")
 else:
     ROOT = Path(__file__).resolve().parents[1]   # project root (D:\SHLHIRINGASS)
@@ -33,6 +36,50 @@ SR = 16000   # all clips are 16 kHz mono (checked during EDA)
 # fp16 halves memory and is much faster on the Kaggle T4, but GTX 16xx cards (the local
 # GTX 1650) produce NaNs in fp16 (verified: Whisper's encoder output was all NaN), so they use fp32.
 DTYPE = torch.float32 if "GTX 16" in torch.cuda.get_device_name() else torch.float16
+AMP = DTYPE == torch.float16   # mixed-precision training only where fp16 works (Kaggle T4)
+
+
+def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix):
+    """Training loop shared by 06_finetune_text.py and 07_finetune_audio.py, for fold k.
+
+    make_model() -> (model, AdamW param groups); built after seeding, so each fold is reproducible.
+    batches(idx, y, rng) yields (model input, target) for one epoch over the train rows idx.
+    predict(model, idx) -> scores on the 0-5 scale.
+    Targets are label / 5 (in [0, 1]), MSE loss. A fixed number of epochs, no early stopping, so the
+    out-of-fold predictions stay honest. Writes artifacts/<prefix>_fold{k}.parquet (val + test rows).
+    """
+    torch.manual_seed(k)
+    rng = np.random.default_rng(k)
+    is_tr = (df.split == "train").values
+    tr_idx = np.where(is_tr & (folds != k))[0]
+    va_idx = np.where(is_tr & (folds == k))[0]
+    te_idx = np.where(~is_tr)[0]
+    y = (df.label.fillna(0).values / 5).astype(np.float32)
+
+    model, groups = make_model()
+    opt = torch.optim.AdamW(groups, weight_decay=0.01)
+    steps = epochs * int(np.ceil(len(tr_idx) / bs))
+    sched = get_linear_schedule_with_warmup(opt, int(0.1 * steps), steps)
+    scaler = torch.amp.GradScaler(enabled=AMP)   # loss scaling for fp16; weights stay fp32
+    for ep in range(epochs):
+        model.train()
+        for x, yb in batches(rng.permutation(tr_idx), y, rng):
+            with torch.autocast("cuda", dtype=torch.float16, enabled=AMP):
+                loss = nn.functional.mse_loss(model(x).float(), yb)
+            opt.zero_grad()
+            scaler.scale(loss).backward()
+            scaler.unscale_(opt)
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            scaler.step(opt)
+            scaler.update()
+            sched.step()
+        # Monitoring only; not used to pick an epoch (keeps the OOF honest).
+        p = np.clip(predict(model, va_idx), 0, 5)
+        print(f"fold {k} epoch {ep}: val RMSE {np.sqrt(np.mean((p - df.label.values[va_idx]) ** 2)):.4f}", flush=True)
+
+    idx = np.r_[va_idx, te_idx]
+    pd.DataFrame({"filename": df.filename.values[idx], "split": df.split.values[idx],
+                  "pred": predict(model, idx)}).to_parquet(ART / f"{prefix}_fold{k}.parquet", index=False)
 
 
 def merge_folds(prefix, name, desc):

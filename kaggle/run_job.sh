@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 JOB=$1
 K=.venv/Scripts/kaggle
-export PYTHONIOENCODING=utf-8   # Kaggle logs contain non-ASCII; the Windows console codec would crash the download
+export PYTHONUTF8=1 PYTHONIOENCODING=utf-8   # Kaggle logs contain non-ASCII; the Windows console codec would crash the download
 DS=kaggle/src_dataset
 KID=$(.venv/Scripts/python -c "import json;print(json.load(open('kaggle/jobs/$JOB/kernel-metadata.json'))['id'])")
 

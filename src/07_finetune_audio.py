@@ -22,12 +22,13 @@ import pandas as pd
 import soundfile as sf
 import torch
 from torch import nn
-from transformers import WavLMModel, get_linear_schedule_with_warmup
+from transformers import WavLMModel
 
-from common import ART, DATA, DTYPE, SR, merge_folds
+from common import AMP, ART, DATA, SR, finetune_fold, merge_folds
 
 CROP = 15 * SR
-AMP = DTYPE == torch.float16   # mixed precision on Kaggle T4 only (GTX 1650 NaNs in fp16)
+MODEL, NAME = "microsoft/wavlm-base-plus", "s4b_wavlm_ft"
+EPOCHS, LR, BS = 8, 3e-5, 8
 
 
 class AudioRegressor(nn.Module):
@@ -74,67 +75,36 @@ def predict(model, wavs):
     return np.array(preds)
 
 
-def train_fold(k, df, wavs, folds, args):
-    torch.manual_seed(k)
-    rng = np.random.default_rng(k)
-    is_tr = (df.split == "train").values
-    tr_idx = np.where(is_tr & (folds != k))[0]
-    va_idx = np.where(is_tr & (folds == k))[0]
-    te_idx = np.where(~is_tr)[0]
-    y = (df.label.fillna(0).values / 5).astype(np.float32)
-
-    model = AudioRegressor(args.model).to("cuda")
+def make_model():
+    model = AudioRegressor(MODEL).to("cuda")
     model.body.gradient_checkpointing_enable()
-    opt = torch.optim.AdamW([{"params": [p for p in model.body.parameters() if p.requires_grad], "lr": args.lr},
-                             {"params": [model.layer_w, *model.head.parameters()], "lr": 1e-3}], weight_decay=0.01)
-    steps = args.epochs * int(np.ceil(len(tr_idx) / args.bs))
-    sched = get_linear_schedule_with_warmup(opt, int(0.1 * steps), steps)
-    scaler = torch.amp.GradScaler(enabled=AMP)
-
-    for ep in range(args.epochs):
-        model.train()
-        order = rng.permutation(tr_idx)
-        for i in range(0, len(order), args.bs):
-            b = order[i:i + args.bs]
-            x = torch.from_numpy(np.stack([normalise(random_crop(wavs[j], rng)) for j in b])).cuda()
-            with torch.autocast("cuda", dtype=torch.float16, enabled=AMP):
-                loss = nn.functional.mse_loss(model(x).float(), torch.from_numpy(y[b]).cuda())
-            opt.zero_grad()
-            scaler.scale(loss).backward()
-            scaler.unscale_(opt)
-            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            scaler.step(opt)
-            scaler.update()
-            sched.step()
-        # Monitoring only; not used to pick an epoch (keeps the OOF honest).
-        p = np.clip(predict(model, [wavs[j] for j in va_idx]), 0, 5)
-        print(f"fold {k} epoch {ep}: val RMSE {np.sqrt(np.mean((p - df.label.values[va_idx]) ** 2)):.4f}", flush=True)
-
-    idx = np.r_[va_idx, te_idx]
-    pd.DataFrame({"filename": df.filename.values[idx], "split": df.split.values[idx],
-                  "pred": predict(model, [wavs[j] for j in idx])}).to_parquet(ART / f"s4b_fold{k}.parquet", index=False)
+    return model, [{"params": [p for p in model.body.parameters() if p.requires_grad], "lr": LR},
+                   {"params": [model.layer_w, *model.head.parameters()], "lr": 1e-3}]
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model", default="microsoft/wavlm-base-plus")
     ap.add_argument("--folds", type=int, nargs="*", default=[0, 1, 2, 3, 4])
-    ap.add_argument("--epochs", type=int, default=8)
-    ap.add_argument("--lr", type=float, default=3e-5)
-    ap.add_argument("--bs", type=int, default=8)
     ap.add_argument("--merge", action="store_true")
-    ap.add_argument("--name", default="s4b_wavlm_ft")
     args = ap.parse_args()
     if args.merge:
-        return merge_folds("s4b", args.name, args.model)
+        return merge_folds("s4b", NAME, MODEL)
 
     df = pd.concat([pd.read_csv(DATA / "train.csv").assign(split="train"),
                     pd.read_csv(DATA / "test.csv").assign(split="test")], ignore_index=True)
     folds = df[["filename"]].merge(pd.read_csv(ART / "folds.csv"), how="left")["fold_s0"].fillna(-1).values
     # All audio in RAM (~3.8 GB float32): avoids re-reading WAVs every epoch.
     wavs = [sf.read(DATA / r.split / r.filename, dtype="float32")[0] for r in df.itertuples()]
+
+    def train_batches(idx, y, rng):   # a fresh random 15 s crop of every clip, every epoch
+        for i in range(0, len(idx), BS):
+            b = idx[i:i + BS]
+            x = np.stack([normalise(random_crop(wavs[j], rng)) for j in b])
+            yield torch.from_numpy(x).cuda(), torch.from_numpy(y[b]).cuda()
+
     for k in args.folds:
-        train_fold(k, df, wavs, folds, args)
+        finetune_fold(k, df, folds, make_model, train_batches, lambda m, idx: predict(m, [wavs[j] for j in idx]),
+                      EPOCHS, BS, "s4b")
 
 
 if __name__ == "__main__":
