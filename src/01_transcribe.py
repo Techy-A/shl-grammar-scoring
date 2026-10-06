@@ -17,6 +17,8 @@ Usage (run from the project root with the GPU venv):
   .venv/Scripts/python src/01_transcribe.py                              # all train + test clips
   .venv/Scripts/python src/01_transcribe.py --limit 20 --tag pilot       # quick pilot on 20 train clips
   .venv/Scripts/python src/01_transcribe.py --limit 20 --no-prompt       # pilot without the verbatim prompt
+  .venv/Scripts/python src/01_transcribe.py --tag prompt --crops 0 1     # test-length crops 0 and 1 of the train
+      clips (common.crop_lengths, the same crops as 05_audio_embed.py --crops) -> transcripts_prompt_crops01.parquet
 """
 import argparse
 
@@ -27,7 +29,7 @@ import torch
 from tqdm import tqdm
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
 
-from common import ART, DATA, DTYPE, SR   # paths + precision, shared with Kaggle runs
+from common import ART, DATA, DTYPE, SR, crop_lengths   # paths + precision, shared with Kaggle runs
 
 MAX_CHUNK = 30 * SR   # Whisper's encoder sees at most 30 s of audio
 MODEL = "openai/whisper-large-v3-turbo"   # ~3.2 GB peak in fp32 (local GTX 1650), ~1.7 GB in fp16 (Kaggle T4)
@@ -91,6 +93,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0, help="pilot mode: N train clips spread across all labels")
     ap.add_argument("--no-prompt", action="store_true", help="disable the verbatim prompt (for comparison)")
     ap.add_argument("--tag", default="full", help="suffix of the output parquet file")
+    ap.add_argument("--crops", type=int, nargs="*", help="transcribe these test-length crops of the train clips instead")
     args = ap.parse_args()
 
     # ---- Clip list: all train + test clips, or a label-stratified pilot subset ----
@@ -100,6 +103,10 @@ def main():
     if args.limit:
         # Sort by label and take evenly spaced rows -> the pilot covers low, mid and high scores.
         files = tr.sort_values("label").iloc[np.linspace(0, len(tr) - 1, args.limit).astype(int)]
+    files["n"] = 10**9   # samples to keep (everything)
+    if args.crops:
+        lens = crop_lengths(len(tr))
+        files = pd.concat([tr.assign(split=f"crop{i}", n=lens[i]) for i in args.crops], ignore_index=True)
 
     # ---- Model: PyTorch SDPA attention, precision from common.DTYPE (fp32 on GTX 16xx, fp16 elsewhere) ----
     proc = WhisperProcessor.from_pretrained(MODEL)
@@ -114,7 +121,8 @@ def main():
 
     rows = []
     for r in tqdm(files.itertuples(), total=len(files)):
-        wav, sr = sf.read(DATA / r.split / r.filename, dtype="float32")
+        wav, sr = sf.read(DATA / ("test" if r.split == "test" else "train") / r.filename, dtype="float32")
+        wav = wav[:r.n]
         assert sr == SR, f"{r.filename}: unexpected sample rate {sr}"
 
         texts, lps, nsp = [], [], []     # per-chunk text, all token log-probs, per-chunk no-speech prob
@@ -146,7 +154,8 @@ def main():
                          asr_nospeech_max=max(nsp),
                          asr_nospeech_mean=float(np.mean(nsp))))
 
-    out = ART / f"transcripts_{args.tag}.parquet"
+    out = ART / (f"transcripts_{args.tag}_crops{''.join(map(str, args.crops))}.parquet" if args.crops
+                 else f"transcripts_{args.tag}.parquet")
     pd.DataFrame(rows).to_parquet(out, index=False)
     print(f"saved {out} ({len(rows)} clips, "
           f"peak VRAM {torch.cuda.max_memory_allocated() / 2**30:.2f} GB)")
