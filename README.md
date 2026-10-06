@@ -1,7 +1,7 @@
 # Spoken Grammar Scoring
 
-> *"he **don't** like it"* — what the speaker said
-> *"he **doesn't** like it"* — what Whisper wrote
+> What the speaker said: *"he **don't** like it"*
+> What Whisper wrote: *"he **doesn't** like it"*
 >
 > Speech recognisers correct grammar by default, which removes the very errors this model has to score.
 
@@ -10,7 +10,7 @@ The model listens to 45–60 s of spontaneous spoken English and predicts a **0�
 
 | | |
 |---|---|
-| **Best public leaderboard** | **0.3262** (lower is better; #1 is 0.3239) |
+| **Best public leaderboard** | **0.3241** (lower is better; #1 is 0.3064) |
 | **Training RMSE** (out-of-fold, speaker-grouped) | **0.528** |
 | **Training Pearson r** (out-of-fold) | **0.905** |
 | **Notebook + full report** | [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb) |
@@ -30,7 +30,7 @@ flowchart LR
     E --> G{score-0 gate}
     T1 & T2 & S --> B[non-negative blend]
     G --> B
-    B --> P[score 0–5<br/>minus 0.118 test bias]
+    B --> P[score 0–5<br/>minus 0.118 test bias<br/>full-length clips × 1.15]
 ```
 
 Every clip is judged two ways:
@@ -43,7 +43,7 @@ Every clip is judged two ways:
 
 1. **Speakers repeat.** Training clips come in "speaker twins". Random CV folds let a model recognise the voice, so all validation uses **speaker-grouped folds**, tuned to be as far from training as the test set is.
 2. **Test clips are shorter.** 71% of test clips are ≤ 55 s, against 26% of training clips, and less audio means a lower prediction. Training on **test-length crops** (with transcripts of the crops) was the biggest leaderboard gain: 0.3454 → 0.3350.
-3. **The leaderboard isn't pure RMSE.** Two probe submissions (v7 ± 0.2) showed a shift-invariant Pearson part *and* a test-set bias of **+0.118**. Removing it gave a predicted 0.3259–0.3264. Actual result: **0.3262**.
+3. **The leaderboard isn't pure RMSE.** Two probe submissions (v7 ± 0.2) showed a shift-invariant Pearson part *and* a test-set bias of **+0.118**. Removing it gave a predicted 0.3259–0.3264. Actual result: **0.3262**. The test predictions were also compressed (std 0.80, against 1.12 out-of-fold). Three more probes showed that the full-length clips should be stretched (× 1.15 around the mean: **0.3241**) and the short clips left alone (stretching them: 0.3408).
 ## Leaderboard progression
 
 | Version | What changed | Public |
@@ -54,9 +54,10 @@ Every clip is judged two ways:
 | v4 | SVRs trained on test-length crops | 0.3384 |
 | v6 | all models trained on 4 crops | 0.3373 |
 | v7 | + text models on crop transcripts | 0.3350 |
-| **v7 − 0.118** | **remove measured test-set bias** | **0.3262** |
+| v7 − 0.118 | remove measured test-set bias | 0.3262 |
+| **full × 1.15** | **stretch compressed full-length test predictions** | **0.3241** |
 
-Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), and end-to-end fine-tuning of DeBERTa and WavLM. The details are in [`submissions/README.md`](submissions/README.md).
+Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), end-to-end fine-tuning of DeBERTa and WavLM, stretching the short test clips, and test-time augmentation over shifted audio windows. The details are in [`submissions/README.md`](submissions/README.md).
 
 ## Pipeline
 
