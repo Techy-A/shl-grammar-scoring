@@ -29,3 +29,8 @@ under-predicting short test clips.
 v7's crop-CV looks worse than v6's only because v6 validated crops with text from the *full* clip
 (words a short test clip never has). With honest validation the text models score lower, but the
 leaderboard confirms v7 is better.
+
+**Metric probes** (`probe_v7_plus0.2.csv` 0.3849, `probe_v7_minus0.2.csv` 0.3305). Adding a constant leaves
+Pearson unchanged. For a pure-RMSE score the two results would satisfy LB(+)^2 + LB(-)^2 = 2*LB(v7)^2 + 2*0.2^2
+(0.3045); they give 0.2574, so the leaderboard score also contains a part shifting can't change (consistent with
+the stated RMSE + Pearson evaluation). Under every form tested, v7's test predictions are about 0.12 too high on average.
