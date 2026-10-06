@@ -11,3 +11,4 @@ lightgbm==4.7.0
 soundfile==0.14.0
 tqdm==4.70.1
 kaggle==2.2.4
+matplotlib==3.11.2

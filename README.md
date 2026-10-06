@@ -3,6 +3,8 @@
 Predicts a 0–5 grammar proficiency score for spoken-English audio clips
 (Kaggle competition `shl-hiring-assessment-2026`).
 
+**Notebook (submission + report):** [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb): approach, preprocessing, pipeline, training RMSE/Pearson, visual diagnostics and what was tested. On Kaggle it rebuilds the submission from raw audio; locally it reuses `artifacts/`.
+
 ## Approach
 
 Two views of each clip, combined at the end:

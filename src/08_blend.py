@@ -14,8 +14,10 @@
   base models' folds; see 10_speaker_folds.py). Fold seeds differ, so there's a small optimism shared
   by every stacking setup.
 
-Usage: python src/08_blend.py s1_lgbm_prompt s2_ridge_deberta s3_ridge_wavlm s4_deberta_ft
-       (the gate always uses s3_ridge_wavlm, which must be in the list)
+Output: artifacts/submission.csv and artifacts/oof_blend.parquet (out-of-fold blend predictions for
+the train clips, used by the notebook's evaluation and plots).
+Usage: python src/08_blend.py <model names: artifacts/pred_<name>.parquet> ...
+       (the gate always uses pred_s3_ridge_wavlm.parquet, whether or not it's in the list)
 """
 import sys
 
@@ -39,7 +41,7 @@ def blend(names):
                    for n in names], axis=1)
     ids = pd.read_parquet(ART / f"pred_{GATE_MODEL}.parquet").set_index(["filename", "split"])
     P = P.loc[ids.index]   # train and test reuse filenames, hence the (filename, split) key
-    gated = (P[GATE_MODEL] < GATE).values
+    gated = (ids.pred < GATE).values
     is_tr = (ids.reset_index().split == "train").values
     y = ids.label.values
     folds = fold_of(ids.index.get_level_values(0)[is_tr], "gfold_s1")
@@ -52,10 +54,13 @@ def blend(names):
         b, w = fit(Xtr[fit_m], ytr[fit_m])
         oof[va] = b + Xtr[va] @ w
     oof = np.where(gtr, 0, np.clip(oof, 0, 5))
-    print(f"blend CV MAE {np.abs(oof - ytr).mean():.4f} | RMSE {np.sqrt(np.mean((oof - ytr) ** 2)):.4f} | gated train {gtr.sum()} "
+    print(f"blend CV RMSE {np.sqrt(np.mean((oof - ytr) ** 2)):.4f} | Pearson {np.corrcoef(oof, ytr)[0, 1]:.4f} | "
+          f"MAE {np.abs(oof - ytr).mean():.4f} | gated train {gtr.sum()} "
           f"(of which label 0: {(ytr[gtr] == 0).sum()}), test {gated[~is_tr].sum()}")
     for band, m in [("0", ytr == 0), ("1.5-3", (ytr > 0) & (ytr <= 3)), ("3.5-5", ytr >= 3.5)]:
-        print(f"  band {band}: MAE {np.abs(oof[m] - ytr[m]).mean():.3f} (n={m.sum()})")
+        print(f"  band {band}: RMSE {np.sqrt(np.mean((oof[m] - ytr[m]) ** 2)):.3f} (n={m.sum()})")
+    pd.DataFrame({"filename": ids.index.get_level_values(0)[is_tr], "label": ytr, "oof": oof}).to_parquet(
+        ART / "oof_blend.parquet", index=False)
 
     # ---- Final weights on all non-gated train clips -> test ----
     b, w = fit(Xtr[~gtr], ytr[~gtr])

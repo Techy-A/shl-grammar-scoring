@@ -65,6 +65,28 @@ def fit_predict(model, X_tr, y_tr, X_ev, seed, groups=None):
     return [m.predict(X) for X in X_ev]
 
 
+def load_tables(feats, crops=False):
+    """Merge feature tables (ids/label from the first) -> train, test, crop rows and feature columns.
+    With crops, each table's _crops file is added; tables without one (text features before crop
+    transcripts existed) reuse the full-clip row for every crop. crop is empty without crops."""
+    def load(f):
+        d = pd.read_parquet(ART / f"{f}.parquet")
+        if not crops:
+            return d
+        path = ART / f"{f}_crops.parquet"
+        extra = ([pd.read_parquet(path)] if path.exists() else
+                 [d[d.split == "train"].assign(split=f"crop{i}") for i in range(N_CROPS)])
+        return pd.concat([d, *extra], ignore_index=True)
+
+    df = load(feats[0])
+    for f in feats[1:]:
+        # Train and test reuse filenames, so the key must include the split.
+        df = df.merge(load(f).drop(columns=["label"], errors="ignore"), on=["filename", "split"])
+    part = lambda m: df[m].reset_index(drop=True)
+    return (part(df.split == "train"), part(df.split == "test"), part(df.split.str.startswith("crop")),
+            [c for c in df.columns if c not in ID_COLS])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", required=True, help="run name, used for output files and the results table")
@@ -73,25 +95,8 @@ def main():
     ap.add_argument("--crops", action="store_true", help="train/validate on test-length crops too")
     args = ap.parse_args()
 
-    # ---- Load and merge feature tables (ids/label taken from the first one) ----
-    def load(f):
-        d = pd.read_parquet(ART / f"{f}.parquet")
-        if not args.crops:
-            return d
-        crops = ART / f"{f}_crops.parquet"
-        extra = ([pd.read_parquet(crops)] if crops.exists() else
-                 [d[d.split == "train"].assign(split=f"crop{i}") for i in range(N_CROPS)])
-        return pd.concat([d, *extra], ignore_index=True)
-
-    df = load(args.feats[0])
-    for f in args.feats[1:]:
-        # Train and test reuse filenames, so the key must include the split.
-        df = df.merge(load(f).drop(columns=["label"], errors="ignore"), on=["filename", "split"])
-    train = df[df.split == "train"].reset_index(drop=True)
-    test = df[df.split == "test"].reset_index(drop=True)
-    crop = df[df.split.str.startswith("crop")].reset_index(drop=True)   # empty without --crops
+    train, test, crop, feat_cols = load_tables(args.feats, args.crops)
     fit_rows = pd.concat([train, crop], ignore_index=True)
-    feat_cols = [c for c in df.columns if c not in ID_COLS]
 
     # ---- CV: average OOF over seeds; test prediction = mean over all fold models ----
     y = train.label.values
