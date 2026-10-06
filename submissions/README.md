@@ -11,7 +11,8 @@ Lower is better; the public leaderboard behaves like MAE.
 | `04_blend_v1_rounded.csv` | 56860770 | v1 | yes | 0.351* | 0.3654 |
 | `05_blend_v3.csv` | 56862170 | v2 + SVR on WavLM-large, SVR on WavLM-large+Whisper+DeBERTa, Whisper Ridge, all-audio SVR | no | **0.340** | 0.3550 |
 | `06_blend_v2_lengthfix.csv` | 56862646 | v2 + 0.14 for test clips of 45-58 s (length-bias test) | no | — | 0.3556 |
-| `07_blend_v4.csv` | 56869082 | v3 with its SVR models trained on full clips + test-length crops (`--crops`) | no | 0.388 (crop-CV) | **0.3384** |
+| `07_blend_v4.csv` | 56869082 | v3 with its SVR models trained on full clips + test-length crops (`--crops`) | no | 0.388 (crop-CV) | 0.3384 |
+| `08_blend_v6.csv` | 56875361 | every model trained on full clips + 4 test-length crops (Ridge alpha picked with clip-grouped CV) | no | 0.387 (crop-CV) | **0.3373** |
 
 \* Rounding improves CV MAE (train labels sit on a 0.5 grid) but made the public score about 0.02
 worse in both paired submissions, so the test labels are probably not on the grid. Rounding was dropped.

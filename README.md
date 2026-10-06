@@ -48,7 +48,7 @@ Each script caches its output in `artifacts/` for the next step.
 | WavLM + DeBERTa embeddings + SVR | 0.519 | 0.396 |
 | **Blend** | **0.483** | **0.349** |
 
-Best public leaderboard score: **0.3384** (blend v4: SVRs trained on test-length crops). The leaderboard tracks CV MAE.
+Best public leaderboard score: **0.3373** (blend v6: every model trained on full clips plus 4 test-length crops). The leaderboard tracks CV MAE.
 Rounding predictions to the 0.5 label grid improved CV but made the public score about 0.02 worse.
 
 ## Running
