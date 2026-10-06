@@ -50,7 +50,7 @@ Each script caches its output in `artifacts/` for the next step.
 | WavLM + DeBERTa embeddings + SVR | 0.519 | 0.396 |
 | **Blend** | **0.483** | **0.349** |
 
-Best public leaderboard score: **0.3350** (blend v7: audio and text models trained on full clips plus 4 test-length crops, with transcripts of the crops). The competition scores with RMSE and Pearson correlation (lower leaderboard score is better).
+Best public leaderboard score: **0.3262** (blend v7 minus a 0.118 test-set bias measured with two shift probes; v7 itself 0.3350). The competition scores with RMSE and Pearson correlation (lower leaderboard score is better).
 Rounding predictions to the 0.5 label grid improved CV but made the public score about 0.02 worse.
 
 ## Running
