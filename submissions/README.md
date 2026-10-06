@@ -35,3 +35,7 @@ leaderboard confirms v7 is better.
 Pearson unchanged. For a pure-RMSE score the two results would satisfy LB(+)^2 + LB(-)^2 = 2*LB(v7)^2 + 2*0.2^2
 (0.3045); they give 0.2574, so the leaderboard score also contains a part shifting can't change (consistent with
 the stated RMSE + Pearson evaluation). Under every form tested, v7's test predictions are about 0.12 too high on average.
+
+**Bias-fix probes** (`probe_biasfix_full_minus0.1.csv` 0.3277, `probe_biasfix_short_minus0.1.csv` 0.3321). Taking a further 0.1
+off either length group of `11_blend_v7_biasfix.csv` (0.3262) made the score worse, so the −0.118 correction is already
+about right for short and full-length clips alike. No further shift.
