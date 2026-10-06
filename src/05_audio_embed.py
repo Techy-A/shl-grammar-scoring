@@ -24,6 +24,7 @@ Output: artifacts/feat_<model short name>.parquet (filename, split, label, a0..)
 Usage : python src/05_audio_embed.py                                   # wavlm-base-plus, layers 4-9
         python src/05_audio_embed.py --model microsoft/wavlm-large --layers 8 16
         python src/05_audio_embed.py --model openai/whisper-large-v3-turbo --layers 16 33
+        python src/05_audio_embed.py --model facebook/w2v-bert-2.0 --layers 6 18
         python src/05_audio_embed.py --crops        # only the test-length crops of the train clips
 """
 import argparse
@@ -33,7 +34,7 @@ import pandas as pd
 import soundfile as sf
 import torch
 from tqdm import tqdm
-from transformers import AutoFeatureExtractor, WavLMModel, WhisperModel
+from transformers import AutoFeatureExtractor, AutoModel, WhisperModel
 
 from common import ART, DATA, DTYPE, N_CROPS, SR, crop_lengths
 
@@ -74,11 +75,12 @@ def main():
         files = pd.concat([tr.assign(split=f"crop{i}", n=lens[i]) for i in range(N_CROPS)], ignore_index=True)
     fe = AutoFeatureExtractor.from_pretrained(args.model)
     model = (WhisperModel.from_pretrained(args.model, dtype=DTYPE).encoder if "whisper" in args.model
-             else WavLMModel.from_pretrained(args.model, dtype=DTYPE)).to("cuda").eval()
+             else AutoModel.from_pretrained(args.model, dtype=DTYPE)).to("cuda").eval()   # WavLM, w2v-BERT, ...
 
     folder = lambda split: "test" if split == "test" else "train"   # crops are cut from train clips
     emb = np.stack([embed_clip(sf.read(DATA / folder(r.split) / r.filename, dtype="float32")[0][:r.n], fe, model, layers)
                     for r in tqdm(files.itertuples(), total=len(files))])
+    assert np.isfinite(emb).all(), "non-finite embeddings (fp16 overflow?)"
     feats = pd.DataFrame(emb, columns=[f"a{i}" for i in range(emb.shape[1])])
     name = f"feat_{args.model.split('/')[-1]}" + ("_crops" if args.crops else "")
     pd.concat([files[["filename", "split", "label"]], feats], axis=1).to_parquet(ART / f"{name}.parquet", index=False)

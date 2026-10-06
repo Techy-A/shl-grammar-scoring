@@ -1,0 +1,12 @@
+{
+  "id": "aryanawasthiteykik/shl-grammar-scoring",
+  "title": "shl-grammar-scoring",
+  "code_file": "shl_grammar_scoring.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "competition_sources": ["shl-hiring-assessment-2026"],
+  "dataset_sources": ["aryanawasthiteykik/shl-src"]
+}

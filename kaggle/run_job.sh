@@ -43,5 +43,7 @@ done
 rm -rf kaggle/jobs/$JOB/out
 # The log download is flaky on Windows (comes back empty / non-zero exit); the outputs still arrive.
 $K kernels output $KID -p kaggle/jobs/$JOB/out || echo "warning: kernels output exited non-zero (usually just the log)"
-[ -d kaggle/jobs/$JOB/out/artifacts ] && cp kaggle/jobs/$JOB/out/artifacts/* artifacts/
+# A job can opt out (marker file keep_outputs) when its outputs must not overwrite local artifacts, e.g. a
+# verification run of the notebook that is compared against them instead.
+[ -d kaggle/jobs/$JOB/out/artifacts ] && [ ! -f kaggle/jobs/$JOB/keep_outputs ] && cp kaggle/jobs/$JOB/out/artifacts/* artifacts/
 echo "$s" | grep -q COMPLETE
