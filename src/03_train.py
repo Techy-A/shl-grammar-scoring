@@ -22,7 +22,8 @@ import argparse
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import RidgeCV
+from sklearn.linear_model import Ridge, RidgeCV
+from sklearn.model_selection import GridSearchCV, GroupKFold
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVR
@@ -33,15 +34,21 @@ SEEDS, N_FOLDS = [0, 1, 2], 5
 ID_COLS = ["filename", "split", "label"]
 
 
-def fit_predict(model, X_tr, y_tr, X_ev, seed):
-    """Train one model and predict for each matrix in X_ev."""
+def fit_predict(model, X_tr, y_tr, X_ev, seed, groups=None):
+    """Train one model and predict for each matrix in X_ev. groups (clip names) is set with --crops."""
     if model == "mean":
         return [np.full(len(X), y_tr.mean()) for X in X_ev]
     if model == "ridge":
         # For wide embedding tables (~1000 dims vs 769 rows): standardise, then pick the L2
         # strength by efficient leave-one-out CV inside the training fold only.
-        m = make_pipeline(StandardScaler(), RidgeCV(alphas=np.logspace(0, 5, 21)))
-        m.fit(X_tr, y_tr)
+        if groups is None:
+            m = make_pipeline(StandardScaler(), RidgeCV(alphas=np.logspace(0, 5, 21))).fit(X_tr, y_tr)
+        else:
+            # With crops a clip appears several times (exact copies for text tables), so leave-one-out
+            # sees its own duplicates and picks almost no regularisation (DeBERTa MAE 0.49 -> 0.80).
+            # Pick the strength with CV grouped by clip instead.
+            m = GridSearchCV(make_pipeline(StandardScaler(), Ridge()), {"ridge__alpha": np.logspace(0, 5, 11)},
+                             cv=GroupKFold(5), scoring="neg_mean_absolute_error").fit(X_tr, y_tr, groups=groups)
         return [m.predict(X) for X in X_ev]
     if model == "svr":
         # Epsilon-insensitive loss is closer to the leaderboard's MAE than Ridge's squared error,
@@ -97,7 +104,8 @@ def main():
             fit_m = fold_of(fit_rows.filename, f"gfold_s{s}") != k   # speaker-grouped (10_speaker_folds.py)
             va_m = fold_of(val.filename, f"gfold_s{s}") == k
             p_va, p_te = fit_predict(args.model, fit_rows.loc[fit_m, feat_cols], fit_rows.label.values[fit_m],
-                                     [val.loc[va_m, feat_cols], test[feat_cols]], seed=s)
+                                     [val.loc[va_m, feat_cols], test[feat_cols]], seed=s,
+                                     groups=fit_rows.filename.values[fit_m] if args.crops else None)
             per_clip = pd.Series(p_va, index=val.filename[va_m]).groupby(level=0).mean()
             oof += per_clip.reindex(train.filename).fillna(0).values / len(SEEDS)
             test_pred += p_te / (len(SEEDS) * N_FOLDS)

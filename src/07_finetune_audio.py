@@ -10,6 +10,8 @@ Design choices:
 * Training on random 15 s crops: augmentation (a new crop every epoch) and test-like lengths
   (test clips are shorter than train clips).
 * Prediction = average over consecutive 15 s windows of the whole clip, weighted by window length.
+  Validation clips are scored on their test-length crops (common.crop_lengths, averaged), the same
+  crops the frozen-embedding models are validated on, so the OOF blends with theirs.
 * Fixed epochs and gfold_s0 from artifacts/folds.csv, same as 06_finetune_text.py, so the OOF can be blended.
 
   train : python src/07_finetune_audio.py --folds 0 1 2     -> artifacts/s4b_fold{k}.parquet
@@ -24,7 +26,7 @@ import torch
 from torch import nn
 from transformers import WavLMModel
 
-from common import AMP, DATA, SR, finetune_fold, fold_of, merge_folds
+from common import AMP, DATA, SR, crop_lengths, finetune_fold, fold_of, merge_folds
 
 CROP = 15 * SR
 MODEL, NAME = "microsoft/wavlm-base-plus", "s4b_wavlm_ft"
@@ -102,9 +104,18 @@ def main():
             x = np.stack([normalise(random_crop(wavs[j], rng)) for j in b])
             yield torch.from_numpy(x).cuda(), torch.from_numpy(y[b]).cuda()
 
+    n_tr, lens = (df.split == "train").sum(), crop_lengths((df.split == "train").sum())   # train rows come first
+
+    def predict_idx(m, idx):   # train (validation) clips: mean over their crops; test clips: whole clip
+        out, is_tr = np.empty(len(idx)), idx < n_tr
+        if is_tr.any():
+            out[is_tr] = np.mean([predict(m, [wavs[j][:L[j]] for j in idx[is_tr]]) for L in lens], axis=0)
+        if (~is_tr).any():
+            out[~is_tr] = predict(m, [wavs[j] for j in idx[~is_tr]])
+        return out
+
     for k in args.folds:
-        finetune_fold(k, df, folds, make_model, train_batches, lambda m, idx: predict(m, [wavs[j] for j in idx]),
-                      EPOCHS, BS, "s4b")
+        finetune_fold(k, df, folds, make_model, train_batches, predict_idx, EPOCHS, BS, "s4b")
 
 
 if __name__ == "__main__":

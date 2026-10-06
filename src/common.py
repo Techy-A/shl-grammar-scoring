@@ -14,6 +14,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import soundfile as sf
 import torch
 from torch import nn
 from transformers import get_linear_schedule_with_warmup
@@ -32,7 +33,7 @@ else:
 ART.mkdir(parents=True, exist_ok=True)
 
 SR = 16000   # all clips are 16 kHz mono (checked during EDA)
-N_CROPS = 2  # test-length crops per train clip (05_audio_embed.py --crops, 03_train.py --crops)
+N_CROPS = 4  # test-length crops per train clip (05_audio_embed.py --crops, 03_train.py --crops)
 
 # fp16 halves memory and is much faster on the Kaggle T4, but GTX 16xx cards (the local
 # GTX 1650) produce NaNs in fp16 (verified: Whisper's encoder output was all NaN), so they use fp32.
@@ -81,6 +82,15 @@ def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix
     idx = np.r_[va_idx, te_idx]
     pd.DataFrame({"filename": df.filename.values[idx], "split": df.split.values[idx],
                   "pred": predict(model, idx)}).to_parquet(ART / f"{prefix}_fold{k}.parquet", index=False)
+
+
+def crop_lengths(n):
+    """Lengths (in samples) of the N_CROPS test-length crops of each of the n train clips: drawn from
+    the test clips' own durations, seed 0. Shared by 05_audio_embed.py and 07_finetune_audio.py so
+    every model is validated on exactly the same crops."""
+    rng = np.random.default_rng(0)
+    test_len = np.array([sf.info(DATA / "test" / f).frames for f in pd.read_csv(DATA / "test.csv").filename])
+    return [rng.choice(test_len, n) for _ in range(N_CROPS)]
 
 
 def fold_of(filenames, col):

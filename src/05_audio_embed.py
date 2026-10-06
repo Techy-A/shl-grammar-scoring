@@ -35,7 +35,7 @@ import torch
 from tqdm import tqdm
 from transformers import AutoFeatureExtractor, WavLMModel, WhisperModel
 
-from common import ART, DATA, DTYPE, N_CROPS, SR
+from common import ART, DATA, DTYPE, N_CROPS, SR, crop_lengths
 
 WINDOW = 20 * SR
 
@@ -69,11 +69,9 @@ def main():
                        pd.read_csv(DATA / "test.csv").assign(split="test")], ignore_index=True)
     files["n"] = 10**9   # samples to keep (everything)
     if args.crops:
-        rng = np.random.default_rng(0)
-        test_len = np.array([sf.info(DATA / "test" / f).frames for f in files.filename[files.split == "test"]])
         tr = files[files.split == "train"]
-        files = pd.concat([tr.assign(split=f"crop{i}", n=rng.choice(test_len, len(tr))) for i in range(N_CROPS)],
-                          ignore_index=True)
+        lens = crop_lengths(len(tr))
+        files = pd.concat([tr.assign(split=f"crop{i}", n=lens[i]) for i in range(N_CROPS)], ignore_index=True)
     fe = AutoFeatureExtractor.from_pretrained(args.model)
     model = (WhisperModel.from_pretrained(args.model, dtype=DTYPE).encoder if "whisper" in args.model
              else WavLMModel.from_pretrained(args.model, dtype=DTYPE)).to("cuda").eval()
