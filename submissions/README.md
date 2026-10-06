@@ -1,7 +1,7 @@
 # Leaderboard submissions
 
 Each file is a `filename,label` prediction for the 216 `test.csv` clips, produced by `src/08_blend.py`.
-Lower is better; the public leaderboard behaves like MAE.
+Lower is better; the competition evaluates with RMSE and Pearson correlation.
 
 | File | Kaggle ref | Blend | Rounded to 0.5 | CV MAE | Public score |
 |---|---|---|---|---|---|

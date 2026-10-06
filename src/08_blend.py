@@ -8,7 +8,8 @@
   Non-negative weights keep correlated models from cancelling each other out (overfitting).
 * No rounding: train labels sit on a 0.5 grid and snapping to it cut CV MAE by 0.02, but it made
   the public leaderboard 0.02 *worse* in two paired submissions, so test labels are probably not on
-  the grid (e.g. averaged raters). The leaderboard tracks CV MAE (public 0.346 vs CV MAE 0.370).
+  the grid (e.g. averaged raters). Rounding also worsens CV RMSE (+0.012) while improving CV MAE, and the
+  leaderboard is scored with RMSE and Pearson correlation, so RMSE is the number to optimise.
 * Honest score: the blend weights are fitted in a second CV over gfold_s1 (speaker-grouped, like the
   base models' folds; see 10_speaker_folds.py). Fold seeds differ, so there's a small optimism shared
   by every stacking setup.
