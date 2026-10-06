@@ -1,0 +1,279 @@
+<meta charset="utf-8">
+<title>Spoken Grammar Scoring Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Literata:opsz,wght@7..72,400;7..72,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one 68ch reading column; charts and tables break out to a wider 980px track. */
+:root {
+  --bg: #f7f8fa; --surface: #ffffff; --ink: #11151c; --muted: #565c66; --rule: #dfe3ea;
+  --accent: #2a78d6; --accent-2: #eb6834; --good: #1a7f37; --bad: #c4352f;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Literata", Georgia, "Times New Roman", serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121418; --surface: #1a1d22; --ink: #eef0f3; --muted: #a3a9b3; --rule: #2c3139;
+  --accent: #3987e5; --accent-2: #d95926; --good: #4cc26a; --bad: #ef6b63; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121418; --surface: #1a1d22; --ink: #eef0f3; --muted: #a3a9b3; --rule: #2c3139;
+  --accent: #3987e5; --accent-2: #d95926; --good: #4cc26a; --bad: #ef6b63; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font: 1.0625rem/1.65 var(--body); padding-inline: 16px; padding-block: 0 4rem }
+main { max-width: 980px; margin: 0 auto }
+.col { max-width: 68ch }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; line-height: 1.15; margin: 0 }
+h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700; letter-spacing: -0.02em }
+h2 { font-size: 1.6rem; font-weight: 700; margin-top: 3.5rem }
+h3 { font-size: 1.1rem; font-weight: 500; margin-top: 1.5rem }
+p { margin: 0.8rem 0 }
+code, .num { font-family: var(--mono); font-size: 0.88em; font-variant-numeric: tabular-nums }
+.eyebrow { font: 600 0.75rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted) }
+a { color: var(--accent) }
+
+/* Hero: the Whisper example is the thesis of the whole project. */
+header { padding-block: 3.5rem 1rem; display: grid; gap: 1rem }
+.lede { font-size: 1.2rem; color: var(--muted); max-width: 60ch; margin: 0 }
+.transcript { font-family: var(--mono); font-size: 0.95rem; display: grid; gap: 0.35rem; border-left: 3px solid var(--rule); padding-left: 1rem; margin-top: 0.5rem }
+.transcript s { color: var(--bad); text-decoration-thickness: 2px }
+.transcript b { color: var(--good) }
+.transcript span { color: var(--muted); font-size: 0.8rem }
+
+/* Headline figures */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin-top: 2rem }
+.stat { background: var(--surface); padding: 1rem 1.2rem; display: grid; gap: 0.2rem }
+.stat .v { font: 600 1.9rem var(--mono); font-variant-numeric: tabular-nums }
+.stat .k { font-size: 0.85rem; color: var(--muted); line-height: 1.4 }
+
+/* Rubric ruler: the 0-5 scale the clips are graded on */
+.ruler { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 2px solid var(--ink); margin-top: 1rem }
+.ruler div { padding: 0.6rem 0.6rem 0 0; font-size: 0.88rem; line-height: 1.4; min-width: 0 }
+.ruler b { display: block; font: 700 1.4rem var(--display) }
+@media (max-width: 640px) { .ruler { grid-template-columns: 1fr } .ruler div { display: flex; gap: 0.8rem } .ruler b { min-width: 1.2rem } }
+
+/* Figures, tables */
+figure { margin: 1.5rem 0; background: var(--surface); border: 1px solid var(--rule); padding: 1rem 1rem 0.6rem }
+figcaption { font-size: 0.9rem; color: var(--muted); margin-top: 0.4rem }
+.ftitle { font: 500 1rem var(--display); margin-bottom: 0.4rem }
+.legend { display: flex; gap: 1.2rem; flex-wrap: wrap; font-size: 0.85rem; color: var(--muted) }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 0.4rem; vertical-align: -1px }
+svg { display: block; width: 100%; height: auto; overflow: visible }
+svg text { fill: var(--muted); font: 11px var(--mono) }
+svg .grid { stroke: var(--rule) }
+.scroll, #c-folds, #c-lb { overflow-x: auto }
+#c-folds svg, #c-lb svg { min-width: 640px }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem }
+th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule); vertical-align: top }
+th { font: 600 0.75rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted) }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap }
+.pill { font: 600 0.72rem var(--mono); padding: 0.1rem 0.5rem; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap }
+.kept { color: var(--good) } .dropped { color: var(--bad) }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1rem }
+.grid2 > * { min-width: 0 }
+.tip { position: fixed; pointer-events: none; background: var(--ink); color: var(--bg); font: 12px var(--mono); padding: 0.35rem 0.55rem; border-radius: 4px; white-space: nowrap; z-index: 9 }
+.math { font-family: var(--mono); font-size: 0.92rem; background: var(--surface); border: 1px solid var(--rule); padding: 0.8rem 1rem; overflow-x: auto }
+footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule); color: var(--muted); font-size: 0.9rem }
+</style>
+
+<main>
+<header>
+  <div class="eyebrow">SHL Hiring Assessment 2026 · Kaggle</div>
+  <h1>Scoring spoken grammar from 45&nbsp;seconds of audio</h1>
+  <p class="lede">A model that listens to an English speaker and grades their grammar from 0 to 5, built on Whisper transcripts, WavLM speech embeddings and a careful look at what the leaderboard actually measures.</p>
+  <div class="transcript" aria-label="Example of Whisper correcting a speaker">
+    <span>speaker said</span><div>"he <b>don't</b> like it"</div>
+    <span>plain Whisper wrote</span><div>"he <s>doesn't</s> like it"</div>
+  </div>
+  <p class="col" style="color:var(--muted);font-size:.95rem;margin:0">Speech recognisers fix grammar by default, which erases the very errors we have to score. Solving that was the first step.</p>
+</header>
+
+<section class="stats" aria-label="Headline results">
+  <div class="stat"><span class="v">0.3262</span><span class="k">Best public leaderboard score (lower is better; #1 is 0.3239)</span></div>
+  <div class="stat"><span class="v">0.528</span><span class="k">Training RMSE, out-of-fold, speaker-grouped, test-length clips</span></div>
+  <div class="stat"><span class="v">0.905</span><span class="k">Training Pearson r, out-of-fold</span></div>
+  <div class="stat"><span class="v">0.112</span><span class="k">Training RMSE, in-sample (fit, not generalisation)</span></div>
+</section>
+
+<section class="col">
+  <h2>The task</h2>
+  <p>Each clip is 45–60&nbsp;s of spontaneous spoken English, rated on a 0–5 grammar scale (MOS Likert). There are <span class="num">769</span> labelled training clips and <span class="num">216</span> test clips. The leaderboard scores predictions with RMSE and Pearson correlation.</p>
+</section>
+<div class="ruler" aria-label="Grammar rubric">
+  <div><b>1</b>Struggles with sentence structure; limited control of simple structures</div>
+  <div><b>2</b>Simple structures with consistent basic errors; incomplete sentences</div>
+  <div><b>3</b>Decent grasp of grammar or of structure, with errors in the other</div>
+  <div><b>4</b>Strong control; occasional minor errors that don't impede understanding</div>
+  <div><b>5</b>High accuracy, complex structures handled well, self-corrections</div>
+</div>
+
+<div class="grid2">
+  <figure><div class="ftitle">Training labels</div><div id="c-labels"></div>
+    <figcaption>Scores cluster between 2 and 5. The 37 score-0 clips contain ordinary speech, but WavLM separates them perfectly, so the difference is acoustic.</figcaption></figure>
+  <figure><div class="ftitle">Clip length shift</div>
+    <table aria-label="Share of short clips"><tr><th></th><th>Median length</th><th>≤ 55 s</th></tr>
+    <tr><td>Train</td><td class="n">60 s</td><td class="n">26%</td></tr><tr><td>Test</td><td class="n">45 s</td><td class="n">71%</td></tr></table>
+    <figcaption>Test clips are shorter and often end mid-sentence. Short training clips really do score lower, so a model can learn "less audio means a lower score". Cutting full-length clips to 48 s lowered a WavLM model's predictions by 0.14 with the same speakers and the same grammar.</figcaption></figure>
+</div>
+
+<section class="col">
+  <h2>Approach</h2>
+  <p>Each clip is described from two angles, then the two views are blended.</p>
+  <h3>What was said</h3>
+  <p>Whisper-large-v3-turbo transcribes the audio with a <em>verbatim</em> prompt full of fillers and mistakes, so it keeps the speaker's errors. From the transcript come length-robust text statistics plus ASR confidence (LightGBM) and DeBERTa-v3-large sentence embeddings (Ridge).</p>
+  <h3>How it was said</h3>
+  <p>Frozen speech encoders (WavLM-base-plus, WavLM-large and the Whisper encoder) are pooled over 20&nbsp;s windows, taking the mean and standard deviation of middle layers, and fed to Ridge and SVR regressors. Audio is the strongest single view: fluency, rhythm and pronunciation track the grammar score closely.</p>
+  <h3>Blend</h3>
+  <p>A non-negative linear blend of every model's out-of-fold predictions, plus a <strong>score-0 gate</strong>: clips the WavLM model scores below 0.5 are set to exactly 0. It catches all 37 score-0 training clips with no false positives.</p>
+</section>
+
+<div class="scroll"><table>
+  <thead><tr><th>Step</th><th>Script</th><th>Output</th></tr></thead>
+  <tbody>
+  <tr><td class="n">1</td><td><code>01_transcribe.py</code></td><td>Whisper transcripts and ASR confidence, for full clips and test-length crops</td></tr>
+  <tr><td class="n">2</td><td><code>02_text_features.py</code></td><td>Length-robust text statistics: rates, ratios, vocabulary richness</td></tr>
+  <tr><td class="n">3</td><td><code>04_text_embed.py</code></td><td>Frozen DeBERTa-v3-large transcript embeddings</td></tr>
+  <tr><td class="n">4</td><td><code>05_audio_embed.py</code></td><td>Frozen WavLM and Whisper-encoder embeddings, full clips and crops</td></tr>
+  <tr><td class="n">5</td><td><code>10_speaker_folds.py</code></td><td>Speaker-grouped CV folds from speaker embeddings and clustering</td></tr>
+  <tr><td class="n">6</td><td><code>03_train.py</code></td><td>CV training of LightGBM, Ridge and SVR; out-of-fold and test predictions</td></tr>
+  <tr><td class="n">7</td><td><code>08_blend.py</code></td><td>Score-0 gate and non-negative blend, written to <code>submission.csv</code></td></tr>
+  </tbody></table></div>
+
+<section class="col">
+  <h2>Validation that matches the test set</h2>
+  <h3>Speaker leakage</h3>
+  <p>A speaker-verification model showed that training clips come in "speaker twins": the same voice with a similar score. With random folds about 80% of validation clips had a twin in training, so cross-validation rewarded models that recognise voices. Test clips are clearly farther from the training set (median nearest-speaker similarity 0.87, against 0.92 within train). The fix clusters speakers and keeps each cluster inside one fold, with the threshold tuned so validation clips sit exactly as far from training as test clips do.</p>
+</section>
+<figure><div class="ftitle">CV RMSE by fold scheme</div>
+  <div class="legend"><span><i style="background:var(--accent)"></i>random folds</span><span><i style="background:var(--accent-2)"></i>speaker-grouped folds</span></div>
+  <div id="c-folds"></div>
+  <figcaption>Audio models lose the most once voices can't leak. Every model choice after this was made on speaker-grouped numbers.</figcaption></figure>
+<section class="col">
+  <h3>Test-length crops</h3>
+  <p>Every training clip is also cut, from the start, to four lengths drawn from the test clips' own durations. Models train on full clips plus crops and are validated on crops, with transcripts of the crops for the text models. This was the single biggest leaderboard gain, from 0.3454 to 0.3350.</p>
+</section>
+
+<section class="col"><h2>Results on the training data</h2>
+  <p>The out-of-fold figures are the honest ones: every clip is predicted by models that never saw its speaker, at test-like lengths. The in-sample figures refit every model on all training data, and the RBF-kernel SVRs nearly memorise what they were trained on, hence 0.112.</p></section>
+<div class="scroll"><table>
+  <thead><tr><th>Model</th><th>Features</th><th>CV RMSE</th><th>CV Pearson</th><th>Blend weight</th></tr></thead>
+  <tbody>
+  <tr><td>Ridge</td><td>WavLM + DeBERTa</td><td class="n">0.556</td><td class="n">0.894</td><td class="n">0.152</td></tr>
+  <tr><td>SVR</td><td>WavLM + WavLM-large + Whisper encoder</td><td class="n">0.589</td><td class="n">0.883</td><td class="n">0.104</td></tr>
+  <tr><td>Ridge</td><td>Whisper encoder</td><td class="n">0.597</td><td class="n">0.877</td><td class="n">0.161</td></tr>
+  <tr><td>SVR</td><td>WavLM-base-plus</td><td class="n">0.597</td><td class="n">0.877</td><td class="n">0.020</td></tr>
+  <tr><td>SVR</td><td>WavLM-large</td><td class="n">0.597</td><td class="n">0.878</td><td class="n">&nbsp;</td></tr>
+  <tr><td>Ridge</td><td>WavLM-base-plus</td><td class="n">0.617</td><td class="n">0.867</td><td class="n">&nbsp;</td></tr>
+  <tr><td>Ridge</td><td>DeBERTa transcript embeddings</td><td class="n">0.772</td><td class="n">0.782</td><td class="n">&nbsp;</td></tr>
+  <tr><td>LightGBM</td><td>Text statistics</td><td class="n">0.794</td><td class="n">0.767</td><td class="n">&nbsp;</td></tr>
+  <tr><td><strong>Blend</strong></td><td>score-0 gate + all of the above</td><td class="n"><strong>0.528</strong></td><td class="n"><strong>0.905</strong></td><td class="n">&nbsp;</td></tr>
+  </tbody></table></div>
+<p class="col" style="font-size:.9rem;color:var(--muted)">Speaker-grouped CV on test-length crops. Blend weights not listed here are in the notebook.</p>
+
+<div class="grid2">
+  <figure><div class="ftitle">Error by true score</div><div id="c-err"></div>
+    <figcaption>Predictions are pulled toward the mean, so the extremes carry the largest error. Score-0 clips are gated to 0 and the 4 clips at 1.0–1.5 are left out.</figcaption></figure>
+  <figure><div class="ftitle">Error by clip length</div><div id="c-len"></div>
+    <figcaption>Out-of-fold RMSE on non-zero clips. After crop training, short clips are only slightly harder than full ones.</figcaption></figure>
+</div>
+
+<section class="col"><h2>Leaderboard progression</h2></section>
+<figure><div class="ftitle">Public score per submission</div>
+  <div class="legend"><span><i style="background:var(--accent)"></i>our submissions</span><span><i style="background:var(--muted)"></i>#1 (0.3239) and #2 (0.3278), dashed</span></div>
+  <div id="c-lb"></div>
+  <figcaption>Lower is better. v3 looked best in cross-validation but scored worse, a reminder that 216 public clips carry about ±0.02 of noise.</figcaption></figure>
+
+<section class="col"><h2>What the leaderboard measures</h2>
+  <p>Adding a constant <em>c</em> to every prediction leaves Pearson unchanged and moves RMSE in a known way, so two shifted copies of v7 test what the score is made of.</p></section>
+<div class="scroll"><table style="max-width:520px">
+  <thead><tr><th>Submission</th><th>Public score</th></tr></thead>
+  <tbody><tr><td>v7</td><td class="n">0.3350</td></tr><tr><td>v7 + 0.2</td><td class="n">0.3849</td></tr><tr><td>v7 − 0.2</td><td class="n">0.3305</td></tr></tbody></table></div>
+<section class="col">
+  <p><strong>Not pure RMSE.</strong> For pure RMSE the two shifted scores would satisfy:</p>
+  <div class="math">LB(+)² + LB(−)² = 2·LB(v7)² + 2·0.2² = 0.3045<br>observed: 0.3849² + 0.3305² = 0.2574</div>
+  <p>Part of the score doesn't move under a shift: the Pearson component. Better models improve both parts together, which is why the score kept falling as the blend improved.</p>
+  <p><strong>A test-set bias.</strong> Solving the same equations under every plausible mix of RMSE and Pearson gives the same answer: v7's test predictions are <strong>0.118 too high</strong> on average. The predicted score after removing it was 0.3259–0.3264, and the actual result was <strong>0.3262</strong>.</p>
+  <p><strong>Where it comes from.</strong> It is the same for short (+0.10) and full-length (+0.13) test clips, and cross-validation shows no bias (−0.008). The test speakers simply score about 0.25 lower on average than the training speakers (implied mean 3.23 against 3.48), so a constant shift is the right correction. The final submission is v7 minus 0.118, clipped to [0, 5].</p>
+</section>
+
+<section class="col"><h2>What we tried</h2></section>
+<div class="scroll"><table>
+  <thead><tr><th>Idea</th><th>Outcome</th><th>Evidence</th></tr></thead>
+  <tbody>
+  <tr><td>Verbatim Whisper prompt</td><td><span class="pill kept">kept</span></td><td>Better text features than plain transcription (LightGBM CV RMSE 0.771 vs 0.792)</td></tr>
+  <tr><td>Audio embeddings (WavLM, Whisper encoder)</td><td><span class="pill kept">kept</span></td><td>Strongest single view</td></tr>
+  <tr><td>Score-0 gate</td><td><span class="pill kept">kept</span></td><td>Catches all 37 score-0 training clips, no false positives</td></tr>
+  <tr><td>Speaker-grouped CV</td><td><span class="pill kept">kept</span></td><td>Removes voice leakage</td></tr>
+  <tr><td>Training on test-length crops and crop transcripts</td><td><span class="pill kept">kept</span></td><td>Biggest leaderboard gain: 0.3454 → 0.3350</td></tr>
+  <tr><td>Removing the test-set bias (−0.118)</td><td><span class="pill kept">kept</span></td><td>Predicted and confirmed: 0.3350 → 0.3262</td></tr>
+  <tr><td>Rounding to the 0.5 label grid</td><td><span class="pill dropped">dropped</span></td><td>Helps MAE, hurts RMSE; about 0.02 worse in two paired submissions</td></tr>
+  <tr><td>Length correction (+0.14 on short clips)</td><td><span class="pill dropped">dropped</span></td><td>Leaderboard worse (0.3556)</td></tr>
+  <tr><td>Grammar-error features (T5 corrector, CoLA, GPT-2 perplexity)</td><td><span class="pill dropped">dropped</span></td><td>Correlate with the score (r = 0.54) but add nothing beyond the embeddings</td></tr>
+  <tr><td>Fine-tuning DeBERTa or WavLM end-to-end</td><td><span class="pill dropped">dropped</span></td><td>Weaker than frozen embeddings with linear models on 769 clips</td></tr>
+  </tbody></table></div>
+
+<section class="col"><h2>Limitations</h2>
+  <p>Only 769 training clips, and the public leaderboard scores 216 test clips, so differences under about 0.01 are mostly noise. Predictions regress toward the mean, so scores of 2 and 5 carry the largest errors. The bias correction assumes the private test speakers resemble the public ones.</p></section>
+
+<footer>Code and notebook: <a href="https://github.com/Techy-A/shl-grammar-scoring">github.com/Techy-A/shl-grammar-scoring</a> · Aryan Awasthi</footer>
+</main>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+// Tiny SVG chart helpers: one scale per chart, theme colours via CSS variables, hover tooltip on every mark.
+const NS = "http://www.w3.org/2000/svg", tip = document.getElementById("tip");
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+const text = (s, attrs, parent) => { const t = el("text", attrs, parent); t.textContent = s; return t; };
+function hover(mark, label) {
+  mark.style.cursor = "default";
+  mark.addEventListener("pointermove", e => { tip.textContent = label; tip.hidden = false; tip.style.left = e.clientX + 12 + "px"; tip.style.top = e.clientY - 30 + "px"; });
+  mark.addEventListener("pointerleave", () => tip.hidden = true);
+}
+function frame(id, W, H, m, yMax, ticks, fmt) {
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img" }, document.getElementById(id));
+  const y = v => H - m.b - (v - (m.y0 || 0)) / (yMax - (m.y0 || 0)) * (H - m.t - m.b);
+  ticks.forEach(t => { el("line", { x1: m.l, x2: W - m.r, y1: y(t), y2: y(t), class: "grid" }, svg); text(fmt(t), { x: m.l - 6, y: y(t) + 4, "text-anchor": "end" }, svg); });
+  return { svg, y };
+}
+// Vertical bars; series = [{key, colour}], rows = [{x, values}]
+function bars(id, rows, series, yMax, ticks, fmt, W = 460, H = 240) {
+  const m = { l: 40, r: 8, t: 10, b: 24 }, { svg, y } = frame(id, W, H, m, yMax, ticks, fmt);
+  const step = (W - m.l - m.r) / rows.length, bw = Math.min(28, step * 0.7 / series.length);
+  rows.forEach((r, i) => {
+    const cx = m.l + step * (i + 0.5);
+    series.forEach((s, j) => {
+      const v = r.values[j], x = cx - bw * series.length / 2 + j * bw + 1, h = y(0) - y(v);
+      const b = el("path", { d: `M${x},${y(0)}v${-h + 3}q0,-3 3,-3h${bw - 8}q3,0 3,3v${h - 3}z`, fill: `var(${s.colour})` }, svg);
+      hover(b, `${r.x}: ${s.key ? s.key + " " : ""}${v}`);
+    });
+    text(r.x, { x: cx, y: H - 6, "text-anchor": "middle" }, svg);
+  });
+}
+bars("c-labels", [[0,37],[1,1],[1.5,3],[2,102],[2.5,79],[3,174],[3.5,64],[4,124],[4.5,52],[5,133]].map(([x, v]) => ({ x: String(x), values: [v] })),
+     [{ key: "", colour: "--accent" }], 180, [0, 60, 120, 180], String);
+bars("c-err", [[2,.722],[2.5,.410],[3,.466],[3.5,.484],[4,.538],[4.5,.538],[5,.557]].map(([x, v]) => ({ x: String(x), values: [v] })),
+     [{ key: "RMSE", colour: "--accent" }], 0.8, [0, .2, .4, .6, .8], v => v.toFixed(1));
+bars("c-len", [["≤ 45 s · 69", .562], ["45–55 s · 124", .585], ["~60 s · 539", .528]].map(([x, v]) => ({ x, values: [v] })),
+     [{ key: "RMSE", colour: "--accent" }], 0.8, [0, .2, .4, .6, .8], v => v.toFixed(1));
+bars("c-folds", [["WavLM Ridge",.564,.598],["WavLM SVR",.535,.589],["WavLM+DeBERTa Ridge",.520,.544],["WavLM-large SVR",.521,.589],["Text LightGBM",.771,.778]]
+     .map(([x, a, b]) => ({ x, values: [a, b] })), [{ key: "random", colour: "--accent" }, { key: "grouped", colour: "--accent-2" }],
+     0.8, [0, .2, .4, .6, .8], v => v.toFixed(1), 900, 260);
+
+// Leaderboard line with the top-two reference lines.
+(function () {
+  const pts = [["v1",.3463],["v2",.3454],["v3",.3550],["v4",.3384],["v6",.3373],["v7",.3350],["v7 − 0.118",.3262]];
+  const W = 900, H = 280, m = { l: 48, r: 20, t: 20, b: 26, y0: 0.32 };
+  const { svg, y } = frame("c-lb", W, H, m, 0.36, [.32, .33, .34, .35, .36], v => v.toFixed(2));
+  const x = i => m.l + 30 + i * (W - m.l - m.r - 60) / (pts.length - 1);
+  [[.3239, "#1"], [.3278, "#2"]].forEach(([v, n]) => {
+    el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: "var(--muted)", "stroke-dasharray": "4 4" }, svg);
+    text(n, { x: W - m.r, y: y(v) - 4, "text-anchor": "end" }, svg);
+  });
+  el("polyline", { points: pts.map((p, i) => `${x(i)},${y(p[1])}`).join(" "), fill: "none", stroke: "var(--accent)", "stroke-width": 2 }, svg);
+  pts.forEach(([n, v], i) => {
+    const last = i === pts.length - 1;
+    const c = el("circle", { cx: x(i), cy: y(v), r: last ? 6 : 4.5, fill: "var(--accent)", stroke: "var(--surface)", "stroke-width": 2 }, svg);
+    hover(c, `${n}: ${v.toFixed(4)}`);
+    if (last || i === 2) text(v.toFixed(4), { x: x(i), y: y(v) - 12, "text-anchor": "middle", style: "fill:var(--ink)" }, svg);
+    text(n, { x: x(i), y: H - 6, "text-anchor": "middle" }, svg);
+  });
+})();
+</script>
