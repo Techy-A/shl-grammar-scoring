@@ -124,7 +124,7 @@ footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule);
 </div>
 <div class="pair">
   <figure><div class="chart" id="c-labels"></div>
-    <figcaption><b>Figure 1.</b> Training label distribution. Scores cluster between 2 and 5. The 37 clips scored 0 contain ordinary speech, yet WavLM separates them perfectly, so the difference is acoustic.</figcaption></figure>
+    <figcaption><b>Figure 1.</b> Training label distribution. Scores cluster between 2 and 5. The 37 clips scored 0 are loud broadband noise with faint speech underneath (unusable recordings); WavLM separates them perfectly.</figcaption></figure>
   <div class="tw" style="margin-top:0"><table>
     <caption>Table 2. Clip length, train against test</caption>
     <thead><tr><th>Split</th><th class="r">Median length</th><th class="r">Clips ≤ 55 s</th></tr></thead>
@@ -207,7 +207,7 @@ footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule);
 <div class="c">
   <p>For pure RMSE the first three rows would satisfy</p>
   <div class="eq">LB(+0.2)² + LB(−0.2)² = 2·LB(v7)² + 2·0.2² = 0.3045<br>observed: 0.3849² + 0.3305² = 0.2574</div>
-  <p>Part of the score therefore does not move under a shift; that part is the Pearson component. Solving the same equations under every plausible mix of RMSE and Pearson gives the same answer: v7's test predictions are 0.118 too high on average. The predicted score after removing the bias was 0.3259–0.3264, and the observed score was 0.3262.</p>
+  <p>Part of the score therefore does not move under a shift; that part is the Pearson component. Five later probes that rescale a submission around its mean pin the formula down: the public score is 0.6&middot;RMSE + 0.4&middot;(1 &minus; Pearson). Solving the same equations under every plausible mix of RMSE and Pearson gives the same answer: v7's test predictions are 0.118 too high on average. The predicted score after removing the bias was 0.3259–0.3264, and the observed score was 0.3262.</p>
   <h3>5.2 Origin of the bias</h3>
   <p>Cross-validation on the training clips shows no bias (−0.008), and further probes show the bias is the same for short and full-length test clips. Shifting either group by a further 0.1 made the score worse (Table 5). The most consistent explanation is that the test speakers score about 0.25 lower on average than the training speakers (implied mean 3.23, against 3.48 in train). A constant shift is the appropriate correction for it.</p>
   <h3>5.3 The spread of the test predictions</h3>

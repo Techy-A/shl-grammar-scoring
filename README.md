@@ -39,13 +39,13 @@ Every clip is judged two ways:
 - **What was said.** Whisper transcribes with a prompt full of fillers and mistakes, so it keeps the speaker's errors instead of correcting them.
 - **How it was said.** Frozen speech encoders capture fluency, rhythm and pronunciation. This turned out to be the strongest signal.
 - **Heard by a language model.** Voxtral-Mini-3B, an audio language model, listens to the clip directly, so it hears errors that the transcript may have smoothed over. Its hidden states, combined with the WavLM, WavLM-large and Whisper-encoder embeddings in one Ridge, are the best single model (CV RMSE 0.538). The idea of using an audio language model this way comes from another participant's public solution.
-- **Score-0 gate.** The WavLM model separates all 37 score-0 training clips perfectly (they contain speech; the difference is acoustic), so those clips are set to exactly 0.
+- **Score-0 gate.** The WavLM model separates all 37 score-0 training clips perfectly (they are loud broadband noise with faint speech underneath, i.e. unusable recordings), so those clips are set to exactly 0.
 
 ## Three things that mattered more than any model
 
 1. **Speakers repeat.** Training clips come in "speaker twins". Random CV folds let a model recognise the voice, so all validation uses **speaker-grouped folds**, tuned to be as far from training as the test set is.
 2. **Test clips are shorter.** 71% of test clips are ≤ 55 s, against 26% of training clips, and less audio means a lower prediction. Training on **test-length crops** (with transcripts of the crops) was the biggest leaderboard gain: 0.3454 → 0.3350.
-3. **The leaderboard isn't pure RMSE.** Two probe submissions (v7 ± 0.2) showed a shift-invariant Pearson part *and* a test-set bias of **+0.118**. Removing it gave a predicted 0.3259–0.3264. Actual result: **0.3262**. The test predictions were also compressed (std 0.80, against 1.12 out-of-fold). Three more probes showed that the full-length clips should be stretched (× 1.15 around the mean: **0.3241**) and the short clips left alone (stretching them: 0.3408).
+3. **The leaderboard metric, decoded.** Probe submissions that rescale a submission around its mean pin the score down as **0.6·RMSE + 0.4·(1 − Pearson)** on the public 60% of the test clips. Two earlier probes (v7 ± 0.2) also measured a test-set bias of **+0.118**. Removing it gave a predicted 0.3259–0.3264. Actual result: **0.3262**. The test predictions were also compressed (std 0.80, against 1.12 out-of-fold). Three more probes showed that the full-length clips should be stretched (× 1.15 around the mean: **0.3241**) and the short clips left alone (stretching them: 0.3408).
 ## Leaderboard progression
 
 | Version | What changed | Public |

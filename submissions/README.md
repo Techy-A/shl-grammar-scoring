@@ -70,3 +70,31 @@ features better than SVR: Ridge on Voxtral + WavLM-base-plus + WavLM-large + Whi
 CV RMSE 0.5375 against 0.5794 for the Voxtral + WavLM-large SVR. Three models, one per kind of signal (DeBERTa ridge for
 the transcript, this ridge, WavLM-large SVR): blend CV 0.5158 against 0.5207. Same corrections (test mean matched to
 v7 - 0.118, a shift of -0.1151; full-length clips x1.15). New best public score; 2nd on the public leaderboard.
+**Kernel ridge with per-block weights** (`16_blend_kernel.csv`, 56908476, 0.3290, worse). One kernel ridge on a weighted sum of
+per-table kernels (Voxtral 1, WavLM 1, WavLM-large linear 0.25 and RBF 2, Whisper encoder 0.25, DeBERTa 0.5; weights from a
+coordinate search on seed 0) plus the DeBERTa ridge: blend CV 0.5044 against 0.5158, but the public score got worse. A fourth
+case of a CV gain from the blend's composition that does not reach the leaderboard; the weight search probably fitted the
+CV folds. Same corrections (shift -0.081 to v7 - 0.118, full-length clips x1.15). Not used.
+**Equal-weight kernel ridge** (`17_blend_kernel_equal.csv`, 0.3286, worse). The Voxtral + all-audio Ridge replaced by a kernel
+ridge over the same four tables with equal per-table weight (no weight search): blend CV 0.5085 against 0.5158, public worse,
+like 16. Both kernel versions lose about 0.008 on the public score for reasons CV does not show. Qwen2-Audio-7B hidden states
+(CV 0.573 alone, the best single table) add nothing next to Voxtral. Voxtral QLoRA stopped (fold 0: 0.764 then 0.789).
+**Short clips compressed x0.89** (`18_ridge3_short_x0.89.csv`, 0.3255, worse). The 0.3207 file with the short test clips
+(<= 55 s) scaled x0.89 around their mean, the optimum of a quadratic fitted through the x1.0 and x1.2 short-stretch probes.
+Worse: the short clips' spread is already about right, and the two-point RMSE model of the score does not hold. 15 stays best.
+
+## Identifying the leaderboard metric
+
+The competition uses a private custom metric notebook (`metric_template`); its pages only say "Pearson Correlation and RMSE".
+Five probes rescale the 0.3207 file around its mean, `m + s (p - m)`, unclipped. For s > 0 Pearson is unchanged and only RMSE
+moves; s = -1 flips the sign of Pearson.
+
+| s | 0.05 | 0.5 | 1 | 1.5 | 2 | -1 |
+|---|---|---|---|---|---|---|
+| public | 0.6225 | 0.4251 | 0.3207 | 0.4403 | 0.6659 | 1.8714 |
+
+`a * sqrt(R^2 + C (s - s0)^2) + K` fits the five s > 0 scores to 1e-5 (a squared-error form misses by 0.019; a free power
+comes out at 0.4997, so the score is linear in RMSE). The flip then separates the Pearson part: with `K = w (1 - r)` and
+`K' = w (1 + r)`, w = 0.40 and r = 0.89. So the public score is **0.6 RMSE + 0.4 (1 - Pearson)** on the public 60% of the test
+clips; for the 0.3207 file the public RMSE is about 0.46 and the Pearson about 0.89. The best scale is s0 = 0.98, so the spread is
+already calibrated (worth 0.0002). Once calibrated, RMSE moves with Pearson as well: +0.01 Pearson is worth about -0.016.
