@@ -1,0 +1,9 @@
+kern/feat_voxtral.npy
+kern/feat_wavlm-base-plus.npy
+kern/feat_wavlm-large.npy
+kern/feat_whisper-large-v3-turbo.npy
+kern/feat_emb_deberta-v3-large_prompt.npy
+kern/keys.parquet
+folds.csv
+folds_topic.csv
+folds_topic95.csv
