@@ -37,7 +37,9 @@ N_CROPS = 4  # test-length crops per train clip (05_audio_embed.py --crops, 03_t
 
 # fp16 halves memory and is much faster on the Kaggle T4, but GTX 16xx cards (the local
 # GTX 1650) produce NaNs in fp16 (verified: Whisper's encoder output was all NaN), so they use fp32.
-DTYPE = torch.float32 if "GTX 16" in torch.cuda.get_device_name() else torch.float16
+# No GPU (CPU-only Kaggle jobs that only train regressors): fp32.
+DTYPE = (torch.float32 if not torch.cuda.is_available() or "GTX 16" in torch.cuda.get_device_name()
+         else torch.float16)
 AMP = DTYPE == torch.float16   # mixed-precision training only where fp16 works (Kaggle T4)
 
 

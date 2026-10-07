@@ -97,16 +97,16 @@ footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule);
 
 <section class="abstract" aria-labelledby="abs">
   <h2 id="abs">Abstract</h2>
-  <p>We predict a 0–5 grammar score for 45–60 s clips of spontaneous spoken English. The system combines Whisper transcripts decoded with a verbatim prompt, frozen WavLM and Whisper-encoder speech embeddings, and a gated non-negative blend of linear and kernel regressors. Two validation corrections mattered more than any model choice: grouping cross-validation folds by speaker, and training on crops that match the shorter test clips. On the training data the final blend reaches an out-of-fold RMSE of <span class="num">0.528</span> (Pearson <span class="num">0.905</span>). On the public leaderboard it scores <span class="num">0.3241</span>, after removing a test-set bias and restoring the compressed spread of the full-length test predictions, both measured with probe submissions.</p>
+  <p>We predict a 0–5 grammar score for 45–60 s clips of spontaneous spoken English. The system combines Whisper transcripts decoded with a verbatim prompt, frozen WavLM and Whisper-encoder speech embeddings, hidden states of an audio language model (Voxtral-Mini-3B), and a gated non-negative blend of four linear and kernel regressors. Two validation corrections mattered more than any model choice: grouping cross-validation folds by speaker, and training on crops that match the shorter test clips. On the training data the final blend reaches an out-of-fold RMSE of <span class="num">0.521</span> (Pearson <span class="num">0.907</span>). On the public leaderboard it scores <span class="num">0.3224</span>, after removing a test-set bias and restoring the compressed spread of the full-length test predictions, both measured with probe submissions.</p>
 </section>
 
 <div class="tw"><table>
   <caption>Table 1. Key results</caption>
   <thead><tr><th>Measure</th><th class="r">Value</th><th>Notes</th></tr></thead>
   <tbody>
-  <tr><td>Public leaderboard score</td><td class="r">0.3241</td><td>Lower is better; the leading entry scores 0.3064</td></tr>
-  <tr><td>Training RMSE, out-of-fold</td><td class="r">0.528</td><td>Speaker-grouped folds, scored on test-length crops</td></tr>
-  <tr><td>Training Pearson r, out-of-fold</td><td class="r">0.905</td><td>Same predictions as above</td></tr>
+  <tr><td>Public leaderboard score</td><td class="r">0.3224</td><td>Lower is better; the leading entry scores 0.3064</td></tr>
+  <tr><td>Training RMSE, out-of-fold</td><td class="r">0.521</td><td>Speaker-grouped folds, scored on test-length crops</td></tr>
+  <tr><td>Training Pearson r, out-of-fold</td><td class="r">0.907</td><td>Same predictions as above</td></tr>
   <tr><td>Training MAE, out-of-fold</td><td class="r">0.392</td><td>For reference</td></tr>
   <tr><td>Training RMSE, in-sample</td><td class="r">0.112</td><td>Models refit on all data; measures fit, not generalisation</td></tr>
   </tbody></table></div>
@@ -139,8 +139,9 @@ footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule);
   <p>Whisper-large-v3-turbo transcribes each clip with a verbatim prompt full of fillers and mistakes, which keeps the speaker's errors in the transcript. Two models use the text: length-robust statistics plus ASR confidence (LightGBM), and DeBERTa-v3-large sentence embeddings (Ridge).</p>
   <h3>2.2 Acoustic features</h3>
   <p>Frozen speech encoders (WavLM-base-plus, WavLM-large and the Whisper encoder) are applied over 20 s windows, pooling the mean and standard deviation of their middle layers. Ridge and RBF-kernel SVR regressors are trained on the pooled embeddings. Audio is the strongest single view, because fluency, rhythm and pronunciation track the grammar score closely.</p>
+  <p>Voxtral-Mini-3B is an audio language model: a Whisper-style encoder feeding a 3B-parameter language model. It hears the clip, followed by the scoring rubric, and the hidden states of its language model over the audio tokens (layers at 20-60% of depth, mean and standard deviation over the tokens that cover real audio) are pooled like the other embeddings. Because it listens rather than reads a transcript, it can register errors that speech recognition smooths over. Combined with WavLM-large in one SVR it is the best single model. The idea of using an audio language model's hidden states as features comes from another participant's public solution; the implementation and its training on test-length crops are ours.</p>
   <h3>2.3 Blend and score-0 gate</h3>
-  <p>A non-negative linear blend with an intercept is fitted to every model's out-of-fold predictions. Clips that the WavLM model scores below 0.5 are set to exactly 0, which catches all 37 score-0 training clips with no false positives.</p>
+  <p>A non-negative linear blend with an intercept is fitted to the out-of-fold predictions of four models, one per kind of signal (Table 4). Four models beat the earlier eight (CV RMSE 0.5207 against 0.5280). Clips that the WavLM model scores below 0.5 are set to exactly 0, which catches all 37 score-0 training clips with no false positives.</p>
 </div>
 <div class="tw"><table>
   <caption>Table 3. Pipeline stages, in run order</caption>
@@ -175,15 +176,11 @@ footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule);
   <caption>Table 4. Component models (speaker-grouped cross-validation on test-length crops)</caption>
   <thead><tr><th>Model</th><th>Features</th><th class="r">RMSE</th><th class="r">Pearson r</th></tr></thead>
   <tbody>
-  <tr><td>Ridge</td><td>WavLM + DeBERTa</td><td class="r">0.556</td><td class="r">0.894</td></tr>
-  <tr><td>SVR</td><td>WavLM + WavLM-large + Whisper encoder</td><td class="r">0.589</td><td class="r">0.883</td></tr>
+  <tr><td>SVR</td><td>Voxtral-Mini-3B + WavLM-large</td><td class="r">0.579</td><td class="r">0.890</td></tr>
   <tr><td>Ridge</td><td>Whisper encoder</td><td class="r">0.597</td><td class="r">0.877</td></tr>
-  <tr><td>SVR</td><td>WavLM-base-plus</td><td class="r">0.597</td><td class="r">0.877</td></tr>
   <tr><td>SVR</td><td>WavLM-large</td><td class="r">0.597</td><td class="r">0.878</td></tr>
-  <tr><td>Ridge</td><td>WavLM-base-plus</td><td class="r">0.617</td><td class="r">0.867</td></tr>
   <tr><td>Ridge</td><td>DeBERTa transcript embeddings</td><td class="r">0.772</td><td class="r">0.782</td></tr>
-  <tr><td>LightGBM</td><td>Text statistics and ASR confidence</td><td class="r">0.794</td><td class="r">0.767</td></tr>
-  <tr class="total"><td>Blend</td><td>Score-0 gate and all models above</td><td class="r">0.528</td><td class="r">0.905</td></tr>
+  <tr class="total"><td>Blend</td><td>Score-0 gate and the four models above</td><td class="r">0.521</td><td class="r">0.907</td></tr>
   </tbody></table></div>
 <div class="pair">
   <figure><div class="chart" id="c-err"></div>
@@ -215,7 +212,7 @@ footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule);
   <h3>5.2 Origin of the bias</h3>
   <p>Cross-validation on the training clips shows no bias (−0.008), and further probes show the bias is the same for short and full-length test clips. Shifting either group by a further 0.1 made the score worse (Table 5). The most consistent explanation is that the test speakers score about 0.25 lower on average than the training speakers (implied mean 3.23, against 3.48 in train). A constant shift is the appropriate correction for it.</p>
   <h3>5.3 The spread of the test predictions</h3>
-  <p>v7's test predictions are also compressed: their standard deviation is 0.80, against 1.12 for its out-of-fold predictions on the training clips. Stretching predictions around their mean, mean + s·(pred − mean), leaves Pearson unchanged, so three probes test where the compression is an error (Table 6). The gain is all in the full-length clips. The short clips' narrower spread (0.65, against 1.04 for full-length clips) is real, and stretching them costs score. The final submission is v7 minus 0.118, with the full-length clips (over 55 s) stretched by 1.15 around the mean of all predictions, clipped to [0, 5].</p>
+  <p>v7's test predictions are also compressed: their standard deviation is 0.80, against 1.12 for its out-of-fold predictions on the training clips. Stretching predictions around their mean, mean + s·(pred − mean), leaves Pearson unchanged, so three probes test where the compression is an error (Table 6). The gain is all in the full-length clips. The short clips' narrower spread (0.65, against 1.04 for full-length clips) is real, and stretching them costs score. The final submission applies both corrections to the four-model blend: the same test mean as v7 minus 0.118 (a shift of &minus;0.1254, since the blend's test mean is 0.0074 above v7's), then the full-length clips (over 55 s) stretched by 1.15 around the mean of all predictions, clipped to [0, 5].</p>
 </div>
 <div class="tw" style="max-width:560px"><table>
   <caption>Table 6. Spread probes (on top of v7 − 0.118)</caption>
@@ -237,12 +234,19 @@ footer { margin-top: 4rem; padding-top: 1rem; border-top: 1px solid var(--rule);
   <tr class="out-kept"><td>Test-length crops and crop transcripts</td><td>Kept</td><td>Leaderboard 0.3454 to 0.3350</td></tr>
   <tr class="out-kept"><td>Test-set bias correction (−0.118)</td><td>Kept</td><td>Predicted and confirmed: 0.3350 to 0.3262</td></tr>
   <tr class="out-kept"><td>Stretching full-length test predictions (× 1.15 around the mean)</td><td>Kept</td><td>Three probes: 0.3262 to 0.3241</td></tr>
+  <tr class="out-kept"><td>Voxtral-Mini-3B hidden states (audio language model), with WavLM-large in one SVR</td><td>Kept</td><td>Best single model (RMSE 0.579); leaderboard 0.3241 to 0.3224</td></tr>
+  <tr class="out-kept"><td>Four models, one per kind of signal</td><td>Kept</td><td>Beat eight models (CV RMSE 0.5207 against 0.5280)</td></tr>
   <tr class="out-drop"><td>Rounding to the 0.5 label grid</td><td>Dropped</td><td>Improves MAE but hurts RMSE; about 0.02 worse in two paired submissions</td></tr>
   <tr class="out-drop"><td>Length correction (+0.14 on short clips)</td><td>Dropped</td><td>Leaderboard worse (0.3556)</td></tr>
   <tr class="out-drop"><td>Grammar-error features (T5 corrector, CoLA, GPT-2 perplexity)</td><td>Dropped</td><td>Correlate with the score (r = 0.54) but add nothing beyond the embeddings</td></tr>
   <tr class="out-drop"><td>End-to-end fine-tuning of DeBERTa and WavLM</td><td>Dropped</td><td>Weaker than frozen embeddings with linear models on 769 clips</td></tr>
   <tr class="out-drop"><td>Stretching short test clips</td><td>Dropped</td><td>Leaderboard much worse (0.3248 to 0.3408)</td></tr>
   <tr class="out-drop"><td>Test-time augmentation (audio windows shifted by 5, 10, 15 s)</td><td>Dropped</td><td>Every shifted view scored worse than the original window grid</td></tr>
+  <tr class="out-drop"><td>LLM judge (Qwen3-8B reads each transcript against the rubric)</td><td>Dropped</td><td>Correlates 0.62 with the score, but not with the blend's errors (r = 0.005)</td></tr>
+  <tr class="out-drop"><td>Voxtral asked for the score directly</td><td>Dropped</td><td>Zero-shot answers compressed (r = 0.45); no blend gain</td></tr>
+  <tr class="out-drop"><td>Voxtral upper layers (60-90% of depth)</td><td>Dropped</td><td>Weaker than the lower-middle layers</td></tr>
+  <tr class="out-drop"><td>LanguageTool error rates</td><td>Dropped</td><td>Weak on transcripts of speech (r = -0.19 at best)</td></tr>
+  <tr class="out-drop"><td>Offset for one recording batch (45.06 s clips)</td><td>Dropped</td><td>Cross-validation better, leaderboard worse (0.3320): the test batch differs</td></tr>
   </tbody></table></div>
 
 <h2><span class="n">7</span>Limitations and conclusion</h2>
@@ -297,7 +301,7 @@ bars("c-folds", [["WavLM, Ridge",.564,.598],["WavLM, SVR",.535,.589],["WavLM + D
 
 // Leaderboard line, with first and second place as dashed reference lines.
 (function () {
-  const pts = [["v1",.3463],["v2",.3454],["v3",.3550],["v4",.3384],["v6",.3373],["v7",.3350],["v7 − 0.118",.3262],["full × 1.15",.3241]];
+  const pts = [["v1",.3463],["v2",.3454],["v3",.3550],["v4",.3384],["v6",.3373],["v7",.3350],["v7 − 0.118",.3262],["full × 1.15",.3241],["+ Voxtral",.3224]];
   const W = 900, H = 290, m = { l: 52, r: 24, t: 22, b: 28 };
   const { svg, y } = frame("c-lb", W, H, m, 0.30, 0.36, [.30, .31, .32, .33, .34, .35, .36], v => v.toFixed(2), "Line chart of public leaderboard score by submission");
   const x = i => m.l + 36 + i * (W - m.l - m.r - 72) / (pts.length - 1);

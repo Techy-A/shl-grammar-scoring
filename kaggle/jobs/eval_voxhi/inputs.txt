@@ -1,0 +1,7 @@
+feat_voxtral_hi.parquet
+feat_voxtral_hi_crops.parquet
+feat_voxtral.parquet
+feat_voxtral_crops.parquet
+feat_wavlm-large.parquet
+feat_wavlm-large_crops.parquet
+folds.csv

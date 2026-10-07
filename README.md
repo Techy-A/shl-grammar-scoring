@@ -10,9 +10,9 @@ The model listens to 45–60 s of spontaneous spoken English and predicts a **0�
 
 | | |
 |---|---|
-| **Best public leaderboard** | **0.3241** (lower is better; #1 is 0.3064) |
-| **Training RMSE** (out-of-fold, speaker-grouped) | **0.528** |
-| **Training Pearson r** (out-of-fold) | **0.905** |
+| **Best public leaderboard** | **0.3224** (lower is better; #1 is 0.3064) |
+| **Training RMSE** (out-of-fold, speaker-grouped) | **0.521** |
+| **Training Pearson r** (out-of-fold) | **0.907** |
 | **Notebook + full report** | [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb) |
 | **Report (web page)** | [techy-a.github.io/shl-grammar-scoring/report](https://techy-a.github.io/shl-grammar-scoring/report/) |
 
@@ -24,11 +24,12 @@ The model listens to 45–60 s of spontaneous spoken English and predicts a **0�
 flowchart LR
     A[audio clip] --> W[Whisper-large-v3-turbo<br/>verbatim prompt]
     A --> E[WavLM · WavLM-large<br/>Whisper encoder]
-    W --> T1[text stats + ASR confidence<br/>LightGBM]
     W --> T2[DeBERTa-v3-large embeddings<br/>Ridge]
+    A --> V[Voxtral-Mini-3B<br/>audio language model]
     E --> S[Ridge / SVR on<br/>pooled embeddings]
+    V --> S
     E --> G{score-0 gate}
-    T1 & T2 & S --> B[non-negative blend]
+    T2 & S --> B[non-negative blend]
     G --> B
     B --> P[score 0–5<br/>minus 0.118 test bias<br/>full-length clips × 1.15]
 ```
@@ -37,6 +38,7 @@ Every clip is judged two ways:
 
 - **What was said.** Whisper transcribes with a prompt full of fillers and mistakes, so it keeps the speaker's errors instead of correcting them.
 - **How it was said.** Frozen speech encoders capture fluency, rhythm and pronunciation. This turned out to be the strongest signal.
+- **Heard by a language model.** Voxtral-Mini-3B, an audio language model, listens to the clip directly, so it hears errors that the transcript may have smoothed over. Its hidden states, combined with WavLM-large in one SVR, are the best single model (CV RMSE 0.579). The idea of using an audio language model this way comes from another participant's public solution.
 - **Score-0 gate.** The WavLM model separates all 37 score-0 training clips perfectly (they contain speech; the difference is acoustic), so those clips are set to exactly 0.
 
 ## Three things that mattered more than any model
@@ -55,9 +57,10 @@ Every clip is judged two ways:
 | v6 | all models trained on 4 crops | 0.3373 |
 | v7 | + text models on crop transcripts | 0.3350 |
 | v7 − 0.118 | remove measured test-set bias | 0.3262 |
-| **full × 1.15** | **stretch compressed full-length test predictions** | **0.3241** |
+| full × 1.15 | stretch compressed full-length test predictions | 0.3241 |
+| **+ Voxtral** | **audio language model features; 4 models, one per kind of signal** | **0.3224** |
 
-Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), end-to-end fine-tuning of DeBERTa and WavLM, stretching the short test clips, and test-time augmentation over shifted audio windows. The details are in [`submissions/README.md`](submissions/README.md).
+Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), end-to-end fine-tuning of DeBERTa and WavLM, stretching the short test clips, test-time augmentation over shifted audio windows, an LLM judge (Qwen3-8B) reading the transcripts against the rubric, LanguageTool error counts, Voxtral's upper layers, and an offset for one recording batch. The details are in [`submissions/README.md`](submissions/README.md).
 
 ## Pipeline
 
@@ -67,6 +70,7 @@ Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), 
 | `src/02_text_features.py` | length-robust text statistics |
 | `src/04_text_embed.py` | frozen DeBERTa-v3-large transcript embeddings |
 | `src/05_audio_embed.py` | frozen WavLM / Whisper-encoder embeddings (full clips and crops) |
+| `src/11_voxtral_embed.py` | Voxtral-Mini-3B hidden states over the audio (full clips and crops) |
 | `src/10_speaker_folds.py` | speaker-grouped CV folds |
 | `src/03_train.py` | CV training of LightGBM / Ridge / SVR on any feature tables |
 | `src/08_blend.py` | score-0 gate + non-negative blend → `artifacts/submission.csv` |

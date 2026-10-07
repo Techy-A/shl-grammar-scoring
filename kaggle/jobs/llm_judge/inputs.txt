@@ -1,0 +1,2 @@
+transcripts_prompt.parquet
+transcripts_prompt_crops.parquet

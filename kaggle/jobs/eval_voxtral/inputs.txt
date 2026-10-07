@@ -1,0 +1,11 @@
+feat_voxtral.parquet
+feat_voxtral_crops.parquet
+feat_wavlm-large.parquet
+feat_wavlm-large_crops.parquet
+feat_wavlm-base-plus.parquet
+feat_wavlm-base-plus_crops.parquet
+feat_whisper-large-v3-turbo.parquet
+feat_whisper-large-v3-turbo_crops.parquet
+feat_emb_deberta-v3-large_prompt.parquet
+feat_emb_deberta-v3-large_prompt_crops.parquet
+folds.csv

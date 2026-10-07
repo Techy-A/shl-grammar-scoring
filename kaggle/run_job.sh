@@ -3,7 +3,7 @@
 #   1. upload src/ as a new version of the private "shl-src" dataset
 #   2. push kaggle/jobs/<job>/ as a private kernel, which runs on Kaggle's GPUs
 #   3. wait for it to finish, then download its outputs into artifacts/
-# Usage: bash kaggle/run_job.sh transcribe
+# Usage: bash kaggle/run_job.sh transcribe   (PUSH_ONLY=1 bash ... to start it without waiting)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 JOB=$1
@@ -21,8 +21,8 @@ cp src/*.py $DS/
 (cd $DS && ../../$K datasets version -p . -m "$JOB $(date +%F_%T)" -q)
 # Wait until the NEW version is live: "status: ready" can still refer to the previous version,
 # and a kernel pushed too early mounts old code. So wait until Kaggle lists every local file
-# with its local size.
-until $K datasets files aryanawasthiteykik/shl-src 2>/dev/null | .venv/Scripts/python -c "
+# with its local size. --page-size: the default listing stops at 20 files.
+until $K datasets files aryanawasthiteykik/shl-src --page-size 200 2>/dev/null | .venv/Scripts/python -c "
 import os, sys
 listed = {l.split()[0]: l.split()[1] for l in sys.stdin if l.strip() and not l.startswith(('name', '-'))}
 local = {f: str(os.path.getsize(f'$DS/{f}')) for f in os.listdir('$DS') if f != 'dataset-metadata.json'}
@@ -32,6 +32,7 @@ sys.exit(any(listed.get(f) != size for f, size in local.items()))"; do sleep 15;
 # A refused push (e.g. "Maximum batch GPU session count of 2 reached") still exits 0, so check the text.
 out=$($K kernels push -p kaggle/jobs/$JOB 2>&1); echo "$out"
 echo "$out" | grep -q "successfully pushed" || exit 1
+[ -n "${PUSH_ONLY:-}" ] && exit 0   # PUSH_ONLY=1: start the job and return; fetch outputs later with "kaggle kernels output"
 
 # 3. Wait, then fetch outputs (artifacts/* land in artifacts/, log in kaggle/jobs/<job>/out/).
 while :; do

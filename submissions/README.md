@@ -60,3 +60,8 @@ test clips) is over-predicted by 0.25 in cross-validation, and a per-batch offse
 CV RMSE from 0.528 to 0.523. Applied to the test set (batch -0.298, other clips -0.003, same total shift as the bias fix,
 full-length clips x1.15) it made the public score worse (0.3241 to 0.3320): the test batch does not behave like the train
 batch, probably because it answers questions that never occur in training. Not used.
+**Voxtral blend** (`14_blend_b3_voxtral.csv`, 56892005, **0.3224**). Voxtral-Mini-3B (an audio language model) hidden states
+over the audio, pooled like the other encoders, combined with WavLM-large in one SVR on full clips + crops: CV RMSE 0.5794,
+the best single model. Blended with three of the v7 models (DeBERTa ridge, Whisper-encoder ridge, WavLM-large SVR): blend CV
+0.5207 against 0.5280 for v7. Same corrections as the 0.3241 file (test mean matched to v7 - 0.118, full-length clips x1.15).
+New best public score. The idea of an audio LLM's hidden states as features comes from another participant's public solution.

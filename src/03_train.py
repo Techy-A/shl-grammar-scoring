@@ -81,7 +81,10 @@ def load_tables(feats, crops=False):
     df = load(feats[0])
     for f in feats[1:]:
         # Train and test reuse filenames, so the key must include the split.
-        df = df.merge(load(f).drop(columns=["label"], errors="ignore"), on=["filename", "split"])
+        # Audio tables share column names (a0, a1, ...): prefix them with the table name, or a 4th table
+        # makes pandas run out of merge suffixes.
+        d = load(f).drop(columns=["label"], errors="ignore")
+        df = df.merge(d.rename(columns={c: f"{f}:{c}" for c in d.columns if c not in ID_COLS}), on=["filename", "split"])
     part = lambda m: df[m].reset_index(drop=True)
     return (part(df.split == "train"), part(df.split == "test"), part(df.split.str.startswith("crop")),
             [c for c in df.columns if c not in ID_COLS])
