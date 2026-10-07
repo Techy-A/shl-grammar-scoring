@@ -113,3 +113,11 @@ better on the other two schemes too, bootstrap P = 0.99). Public 0.3390: the thi
 local optimum: adding any of 13 ridge/SVR models or the transcript statistics changes the topic-fold score by less than 0.001.
 Importance weighting for the covariate shift (each training clip weighted by how test-like it looks): better only on a
 test-weighted CV score (-0.006), worse on every plain fold scheme; not submitted.
+
+**Voxtral judgement states** (`22_ridge3_voxjudge.csv`, 0.3247, worse). `11_voxtral_embed.py --last` saves the hidden states
+that come after the audio and therefore also see the scoring rubric (last token before the answer, mid and upper layers;
+mean over the rubric's tokens), computed on a free Colab T4. They are less domain-shifted than the audio states (test-vs-train
+AUC 0.79 vs 0.83), and adding them to the main ridge improves every CV scheme in both training variants (topic-grouped
+-0.0026, strict-topic -0.0024, speaker-grouped -0.0033). Submitted as a minimal change of the 0.3207 file (its raw predictions
+plus the blend difference, same corrections; correlation 0.9987): public 0.3247. The seventh change in a row that is better
+or equal in validation and worse on the public 60%; the 0.3207 file is a lucky local optimum of the public clips.

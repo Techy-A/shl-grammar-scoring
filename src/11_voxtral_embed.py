@@ -14,6 +14,10 @@ the audio tokens -> 2 x 3072 features. --upper pools the upper layers (60-90%) i
 (the judgement is the same either way, so it isn't saved again). Voxtral pads audio to 30 s chunks of 375 tokens (12.5 per second),
 so tokens that only cover padding are dropped before pooling (as the Whisper padding in 05_audio_embed.py).
 
+--last saves, instead of the audio-token pooling, the states that come after the audio and so attend to both the audio
+and the rubric: the last token before the answer (lower-middle and upper layers) and the mean over the rubric's tokens,
+3 x 3072 features -> feat_voxtral_last (Voxtral's own judgement of the clip, closer to the task than the audio states).
+
 --crops embeds the same test-length crops of the train clips as 05_audio_embed.py --crops, so
 03_train.py --crops can train and validate at test-like lengths. --shard k n embeds every n-th row from
 row k (two T4s, one model each); the Kaggle job merges the shards.
@@ -51,13 +55,20 @@ CHUNK_TOKENS, TOKENS_PER_SEC = 375, 12.5   # Voxtral: one 30 s chunk = 375 audio
 
 
 @torch.inference_mode()
-def embed_clip(wav, proc, model, layers, digits, tmp):
+def embed_clip(wav, proc, model, layers, digits, tmp, last_layers=None):
     sf.write(tmp, wav, SR)   # the chat template takes audio by path
     conv = [{"role": "user", "content": [{"type": "audio", "path": str(tmp)}, {"type": "text", "text": PROMPT}]}]
     x = proc.apply_chat_template(conv).to("cuda", dtype=DTYPE)
     out = model(**x, output_hidden_states=True)
     probs = torch.softmax(out.logits[0, -1, digits].float(), 0).cpu().numpy()   # the answer digit
     hs = out.hidden_states
+    if last_layers is not None:
+        # --last: the states AFTER the audio, which attend to the audio and the rubric: the last token (just before the
+        # answer) averaged over the lower-middle and over the upper layers, and the mean over the rubric's tokens.
+        mid = torch.stack([hs[l][0] for l in layers]).float().mean(0)
+        up = torch.stack([hs[l][0] for l in last_layers]).float().mean(0)
+        after = (x["input_ids"][0] == model.config.audio_token_id).nonzero()[-1].item() + 1
+        return torch.cat([mid[-1], up[-1], mid[after:].mean(0)]).cpu().numpy(), probs
     h = torch.stack([hs[l][0] for l in layers]).float().mean(0)   # (tokens, hidden), averaged over layers
     # Audio tokens that cover real audio: in chunk c, the first ceil(seconds of audio in c * 12.5).
     pos = (x["input_ids"][0] == model.config.audio_token_id).nonzero().squeeze(-1)
@@ -74,6 +85,8 @@ def main():
     ap.add_argument("--shard", type=int, nargs=2, default=[0, 1], metavar=("K", "N"), help="rows K, K+N, K+2N, ...")
     ap.add_argument("--limit", type=int, default=0, help="first N rows only (smoke test)")
     ap.add_argument("--upper", action="store_true", help="pool layers 60-90%% of depth -> feat_voxtral_hi")
+    ap.add_argument("--last", action="store_true",
+                    help="states after the audio and the rubric (last token, rubric mean) -> feat_voxtral_last")
     args = ap.parse_args()
 
     # Same row list as 05_audio_embed.py, so crops line up with the other audio tables.
@@ -99,19 +112,21 @@ def main():
 
     folder = lambda split: "test" if split == "test" else "train"   # crops are cut from train clips
     tmp = Path(tempfile.gettempdir()) / f"voxtral_{k}.wav"
+    last_layers = range(int(0.6 * L), int(0.9 * L) + 1) if args.last else None
     emb, probs = map(np.stack, zip(*[embed_clip(sf.read(DATA / folder(r.split) / r.filename, dtype="float32")[0][:r.n],
-                                                proc, model, layers, digits, tmp)
+                                                proc, model, layers, digits, tmp, last_layers)
                                      for r in tqdm(files.itertuples(), total=len(files), mininterval=60)]))
     # ponytail: an fp16 overflow fails the whole run; add a per-clip fp32 retry if it ever happens
     assert np.isfinite(emb).all() and np.isfinite(probs).all(), "non-finite outputs (fp16 overflow?)"
     ids = files[["filename", "split", "label"]]
     sfx = ("_crops" if args.crops else "") + (f"_shard{k}" if n > 1 else "")
+    name = "feat_voxtral" + ("_hi" if args.upper else "_last" if args.last else "")
     pd.concat([ids, pd.DataFrame(emb, columns=[f"a{i}" for i in range(emb.shape[1])])], axis=1).to_parquet(
-        ART / f"feat_voxtral{'_hi' if args.upper else ''}{sfx}.parquet", index=False)
-    if not args.upper:
+        ART / f"{name}{sfx}.parquet", index=False)
+    if not (args.upper or args.last):
         ids.assign(v_mean=probs @ np.arange(1, 6), **{f"v_p{d}": probs[:, d - 1] for d in range(1, 6)}).to_parquet(
             ART / f"feat_voxtral_judge{sfx}.parquet", index=False)
-    print(f"saved feat_voxtral{'_hi' if args.upper else ''}{sfx} {emb.shape}, layers {layers.start}-{layers.stop - 1} of {L}, "
+    print(f"saved {name}{sfx} {emb.shape}, layers {layers.start}-{layers.stop - 1} of {L}, "
           f"judge mean {(probs @ np.arange(1, 6)).mean():.2f}, peak VRAM {torch.cuda.max_memory_allocated() / 2**30:.2f} GB")
 
 
