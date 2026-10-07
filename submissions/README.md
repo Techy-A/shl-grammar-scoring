@@ -104,3 +104,12 @@ folds, no gain under topic-grouped folds (`folds_topic.csv`, which match the tes
 model also learns from the blend's predictions on unlabelled held-out clips, simulated inside CV): worse under every fold
 scheme (topic-grouped 0.3268 vs 0.330 after one round, 0.340 after two). Calibration is exhausted too: re-fitting the shift
 probes with the decoded metric gives an optimal shift of -0.1179 (used: -0.118), and the best rescaling is 0.98.
+
+**Overnight search** (`21_kernel_crisper_svr.csv`, 0.3390, worse). 18 candidate models trained without the score-0 clips,
+scored on topic-grouped, strict-topic and speaker-grouped folds (3 seeds each); a greedy blend search on the topic folds
+picked the tuned kernel + a CrisperWhisper text ridge + an all-audio SVR (topic 0.3175 vs 0.3242 for the 0.3207 structure,
+better on the other two schemes too, bootstrap P = 0.99). Public 0.3390: the third public failure of the kernel models
+(16, 17, 21) although they win every CV scheme, so they are excluded from candidates. Without them, the 0.3207 structure is a
+local optimum: adding any of 13 ridge/SVR models or the transcript statistics changes the topic-fold score by less than 0.001.
+Importance weighting for the covariate shift (each training clip weighted by how test-like it looks): better only on a
+test-weighted CV score (-0.006), worse on every plain fold scheme; not submitted.
