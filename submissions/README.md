@@ -65,3 +65,8 @@ over the audio, pooled like the other encoders, combined with WavLM-large in one
 the best single model. Blended with three of the v7 models (DeBERTa ridge, Whisper-encoder ridge, WavLM-large SVR): blend CV
 0.5207 against 0.5280 for v7. Same corrections as the 0.3241 file (test mean matched to v7 - 0.118, full-length clips x1.15).
 New best public score. The idea of an audio LLM's hidden states as features comes from another participant's public solution.
+**Ridge on Voxtral + all audio encoders** (`15_blend_ridge3.csv`, 56899694, **0.3207**). Ridge suits the wide Voxtral
+features better than SVR: Ridge on Voxtral + WavLM-base-plus + WavLM-large + Whisper encoder (12288 features, crops) has
+CV RMSE 0.5375 against 0.5794 for the Voxtral + WavLM-large SVR. Three models, one per kind of signal (DeBERTa ridge for
+the transcript, this ridge, WavLM-large SVR): blend CV 0.5158 against 0.5207. Same corrections (test mean matched to
+v7 - 0.118, a shift of -0.1151; full-length clips x1.15). New best public score; 2nd on the public leaderboard.

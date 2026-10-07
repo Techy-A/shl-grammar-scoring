@@ -10,9 +10,9 @@ The model listens to 45–60 s of spontaneous spoken English and predicts a **0�
 
 | | |
 |---|---|
-| **Best public leaderboard** | **0.3224** (lower is better; #1 is 0.3064) |
-| **Training RMSE** (out-of-fold, speaker-grouped) | **0.521** |
-| **Training Pearson r** (out-of-fold) | **0.907** |
+| **Best public leaderboard** | **0.3207** (lower is better; #1 is 0.3064) |
+| **Training RMSE** (out-of-fold, speaker-grouped) | **0.516** |
+| **Training Pearson r** (out-of-fold) | **0.909** |
 | **Notebook + full report** | [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb) |
 | **Report (web page)** | [techy-a.github.io/shl-grammar-scoring/report](https://techy-a.github.io/shl-grammar-scoring/report/) |
 
@@ -38,7 +38,7 @@ Every clip is judged two ways:
 
 - **What was said.** Whisper transcribes with a prompt full of fillers and mistakes, so it keeps the speaker's errors instead of correcting them.
 - **How it was said.** Frozen speech encoders capture fluency, rhythm and pronunciation. This turned out to be the strongest signal.
-- **Heard by a language model.** Voxtral-Mini-3B, an audio language model, listens to the clip directly, so it hears errors that the transcript may have smoothed over. Its hidden states, combined with WavLM-large in one SVR, are the best single model (CV RMSE 0.579). The idea of using an audio language model this way comes from another participant's public solution.
+- **Heard by a language model.** Voxtral-Mini-3B, an audio language model, listens to the clip directly, so it hears errors that the transcript may have smoothed over. Its hidden states, combined with the WavLM, WavLM-large and Whisper-encoder embeddings in one Ridge, are the best single model (CV RMSE 0.538). The idea of using an audio language model this way comes from another participant's public solution.
 - **Score-0 gate.** The WavLM model separates all 37 score-0 training clips perfectly (they contain speech; the difference is acoustic), so those clips are set to exactly 0.
 
 ## Three things that mattered more than any model
@@ -58,7 +58,8 @@ Every clip is judged two ways:
 | v7 | + text models on crop transcripts | 0.3350 |
 | v7 − 0.118 | remove measured test-set bias | 0.3262 |
 | full × 1.15 | stretch compressed full-length test predictions | 0.3241 |
-| **+ Voxtral** | **audio language model features; 4 models, one per kind of signal** | **0.3224** |
+| + Voxtral | audio language model features; 4 models, one per kind of signal | 0.3224 |
+| **Ridge, 3 models** | **one Ridge on Voxtral + all audio encoders; 3 models, one per kind of signal** | **0.3207** |
 
 Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), end-to-end fine-tuning of DeBERTa and WavLM, stretching the short test clips, test-time augmentation over shifted audio windows, an LLM judge (Qwen3-8B) reading the transcripts against the rubric, LanguageTool error counts, Voxtral's upper layers, and an offset for one recording batch. The details are in [`submissions/README.md`](submissions/README.md).
 
