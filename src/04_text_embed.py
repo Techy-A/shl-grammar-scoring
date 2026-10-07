@@ -27,14 +27,14 @@ from transformers import AutoModel, AutoTokenizer
 
 from common import ART, DTYPE
 
-BATCH = 8
+BATCH = 8   # --batch 2 fits a 4 GB GPU in fp32
 
 
 @torch.inference_mode()
-def embed(texts, tok, model, layers):
+def embed(texts, tok, model, layers, batch=BATCH):
     out = []
-    for i in tqdm(range(0, len(texts), BATCH)):
-        enc = tok(texts[i:i + BATCH], padding=True, truncation=True, max_length=512,
+    for i in tqdm(range(0, len(texts), batch)):
+        enc = tok(texts[i:i + batch], padding=True, truncation=True, max_length=512,
                   return_tensors="pt").to("cuda")
         hidden = model(**enc, output_hidden_states=True).hidden_states[layers]
         h = torch.stack(hidden).float().mean(0)                  # (batch, tokens, dim), avg over the layers
@@ -48,6 +48,7 @@ def main():
     ap.add_argument("--tag", default="prompt", help="which transcripts_<tag>.parquet to embed")
     ap.add_argument("--model", default="microsoft/deberta-v3-large")
     ap.add_argument("--layers", type=int, nargs=2, default=[-4, None], help="hidden-state slice [start, stop); default: last 4")
+    ap.add_argument("--batch", type=int, default=BATCH)
     args = ap.parse_args()
 
     tr = pd.read_parquet(ART / f"transcripts_{args.tag}.parquet")
@@ -55,7 +56,7 @@ def main():
     model = AutoModel.from_pretrained(args.model, dtype=DTYPE).to("cuda").eval()
 
     # Empty transcripts (silent clips) still need a row; an empty string embeds to the [CLS]/[SEP] mean.
-    emb = embed(tr.text.fillna("").tolist(), tok, model, slice(*args.layers))
+    emb = embed(tr.text.fillna("").tolist(), tok, model, slice(*args.layers), args.batch)
     assert np.isfinite(emb).all(), "non-finite embeddings (fp16 overflow?)"
     feats = pd.DataFrame(emb, columns=[f"e{i}" for i in range(emb.shape[1])])
     out = pd.concat([tr[["filename", "split", "label"]], feats], axis=1)

@@ -98,3 +98,9 @@ comes out at 0.4997, so the score is linear in RMSE). The flip then separates th
 `K' = w (1 + r)`, w = 0.40 and r = 0.89. So the public score is **0.6 RMSE + 0.4 (1 - Pearson)** on the public 60% of the test
 clips; for the 0.3207 file the public RMSE is about 0.46 and the Pearson about 0.89. The best scale is s0 = 0.98, so the spread is
 already calibrated (worth 0.0002). Once calibrated, RMSE moves with Pearson as well: +0.01 Pearson is worth about -0.016.
+
+**Later experiments, no submission.** CrisperWhisper verbatim transcripts for the text model: better under speaker-grouped
+folds, no gain under topic-grouped folds (`folds_topic.csv`, which match the test set's topic distance). Co-training (each
+model also learns from the blend's predictions on unlabelled held-out clips, simulated inside CV): worse under every fold
+scheme (topic-grouped 0.3268 vs 0.330 after one round, 0.340 after two). Calibration is exhausted too: re-fitting the shift
+probes with the decoded metric gives an optimal shift of -0.1179 (used: -0.118), and the best rescaling is 0.98.

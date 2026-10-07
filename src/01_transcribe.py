@@ -19,6 +19,10 @@ Usage (run from the project root with the GPU venv):
   .venv/Scripts/python src/01_transcribe.py --limit 20 --no-prompt       # pilot without the verbatim prompt
   .venv/Scripts/python src/01_transcribe.py --tag prompt --crops 0 1     # test-length crops 0 and 1 of the train
       clips (common.crop_lengths, the same crops as 05_audio_embed.py --crops) -> transcripts_prompt_crops01.parquet
+  .venv/Scripts/python src/01_transcribe.py --model nyrahealth/CrisperWhisper --no-prompt --beams 1 --tag crisper
+      CrisperWhisper, a Whisper-large-v3 fine-tuned for verbatim transcripts (keeps fillers, false starts and
+      errors), so it needs no verbatim prompt; --shard k n transcribes every n-th clip from row k (one GPU each),
+      --batch 16 decodes 16 chunks per generate call (several times faster on a T4)
 """
 import argparse
 
@@ -32,7 +36,7 @@ from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from common import ART, DATA, DTYPE, SR, crop_lengths   # paths + precision, shared with Kaggle runs
 
 MAX_CHUNK = 30 * SR   # Whisper's encoder sees at most 30 s of audio
-MODEL = "openai/whisper-large-v3-turbo"   # ~3.2 GB peak in fp32 (local GTX 1650), ~1.7 GB in fp16 (Kaggle T4)
+MODEL = "openai/whisper-large-v3-turbo"   # default; ~3.2 GB peak in fp32 (local GTX 1650), ~1.7 GB in fp16 (Kaggle T4)
 
 # Verbatim-style prompt: deliberately full of fillers, repetitions and grammar errors so
 # Whisper keeps the speaker's mistakes instead of correcting them.
@@ -94,6 +98,10 @@ def main():
     ap.add_argument("--no-prompt", action="store_true", help="disable the verbatim prompt (for comparison)")
     ap.add_argument("--tag", default="full", help="suffix of the output parquet file")
     ap.add_argument("--crops", type=int, nargs="*", help="transcribe these test-length crops of the train clips instead")
+    ap.add_argument("--model", default=MODEL, help="any Whisper checkpoint on the Hugging Face hub")
+    ap.add_argument("--beams", type=int, default=4, help="beam width (1 = greedy, much faster for large decoders)")
+    ap.add_argument("--batch", type=int, default=1, help="30 s chunks decoded per generate call (16 fits a T4 in fp16)")
+    ap.add_argument("--shard", type=int, nargs=2, metavar=("K", "N"), help="only rows K, K+N, K+2N, ...")
     args = ap.parse_args()
 
     # ---- Clip list: all train + test clips, or a label-stratified pilot subset ----
@@ -107,11 +115,13 @@ def main():
     if args.crops:
         lens = crop_lengths(len(tr))
         files = pd.concat([tr.assign(split=f"crop{i}", n=lens[i]) for i in args.crops], ignore_index=True)
+    if args.shard:
+        files = files.iloc[args.shard[0]::args.shard[1]]
 
     # ---- Model: PyTorch SDPA attention, precision from common.DTYPE (fp32 on GTX 16xx, fp16 elsewhere) ----
-    proc = WhisperProcessor.from_pretrained(MODEL)
+    proc = WhisperProcessor.from_pretrained(args.model)
     model = WhisperForConditionalGeneration.from_pretrained(
-        MODEL, dtype=DTYPE, attn_implementation="sdpa").to("cuda").eval()
+        args.model, dtype=DTYPE, attn_implementation="sdpa").to("cuda").eval()
     tokz = proc.tokenizer
     # Decoder prefix Whisper expects for English transcription without timestamps.
     prefix = tokz.convert_tokens_to_ids(
@@ -119,43 +129,68 @@ def main():
     nospeech_id = tokz.convert_tokens_to_ids("<|nospeech|>")
     prompt_ids = None if args.no_prompt else proc.get_prompt_ids(PROMPT, return_tensors="pt").to("cuda")
 
-    rows = []
-    for r in tqdm(files.itertuples(), total=len(files)):
-        wav, sr = sf.read(DATA / ("test" if r.split == "test" else "train") / r.filename, dtype="float32")
-        wav = wav[:r.n]
-        assert sr == SR, f"{r.filename}: unexpected sample rate {sr}"
-
-        texts, lps, nsp = [], [], []     # per-chunk text, all token log-probs, per-chunk no-speech prob
-        for ch in split_chunks(wav):
-            # Log-mel features, padded to 30 s by the processor.
-            feats = proc(ch, sampling_rate=SR, return_tensors="pt").input_features.to("cuda", DTYPE)
-            gen = model.generate(feats, language="en", task="transcribe", num_beams=4,
-                                 prompt_ids=prompt_ids, max_new_tokens=220)
-            # Keep only text tokens: every special token id is >= eos_token_id in Whisper's vocab.
-            toks = [t for t in gen[0].tolist() if t < tokz.eos_token_id]
+    def decode(chunks):
+        """Transcribe up to --batch chunks (each <= 30 s) in one generate call -> [(text, token log-probs, no-speech prob)]."""
+        # Log-mel features, each padded to 30 s by the processor.
+        feats = proc(chunks, sampling_rate=SR, return_tensors="pt").input_features.to("cuda", DTYPE)
+        gen = model.generate(feats, language="en", task="transcribe", num_beams=args.beams,
+                             prompt_ids=prompt_ids, max_new_tokens=220)
+        out = []
+        for j in range(len(chunks)):
+            # Keep only text tokens: every special token id is >= eos_token_id in Whisper's vocab (this also drops
+            # the padding of rows that finished early).
+            toks = [t for t in gen[j].tolist() if t < tokz.eos_token_id]
             if prompt_ids is not None:
                 # Some transformers versions return the prompt as part of the output: strip it.
                 p = prompt_ids.tolist()[1:]          # [1:] skips the <|startofprev|> marker
                 if toks[: len(p)] == p:
                     toks = toks[len(p):]
-            lp, ns = confidence(model, feats, prefix, toks, nospeech_id)
-            texts.append(tokz.decode(toks, skip_special_tokens=True).strip())
-            lps += lp
-            nsp.append(ns)
+            lp, ns = confidence(model, feats[j:j + 1], prefix, toks, nospeech_id)
+            out.append((tokz.decode(toks, skip_special_tokens=True).strip(), lp, ns))
+        return out
 
-        # Aggregate per-clip confidence stats (NaN-safe in case nothing was decoded).
-        lps = np.array(lps) if lps else np.array([np.nan])
-        rows.append(dict(filename=r.filename, split=r.split, label=r.label,
-                         duration=len(wav) / SR, n_chunks=len(nsp), text=" ".join(texts),
-                         asr_avg_lp=np.nanmean(lps),                # overall confidence
-                         asr_min_lp=np.nanmin(lps),                 # worst single token
-                         asr_p10_lp=np.nanpercentile(lps, 10),      # robust "low-confidence tail"
-                         asr_n_tok=int(np.isfinite(lps).sum()),     # amount of speech decoded
-                         asr_nospeech_max=max(nsp),
-                         asr_nospeech_mean=float(np.mean(nsp))))
+    rows = []
 
-    out = ART / (f"transcripts_{args.tag}_crops{''.join(map(str, args.crops))}.parquet" if args.crops
-                 else f"transcripts_{args.tag}.parquet")
+    def flush(group):
+        """Decode the chunks of a group of clips (--batch at a time) and add one row per clip."""
+        flat = [c for _, _, chunks in group for c in chunks]
+        res = [x for i in range(0, len(flat), args.batch) for x in decode(flat[i:i + args.batch])]
+        k = 0
+        for r, n, chunks in group:
+            part = res[k:k + len(chunks)]
+            k += len(chunks)
+            texts = [t for t, _, _ in part]                  # per-chunk text
+            lps = [x for _, lp, _ in part for x in lp]       # all token log-probs
+            nsp = [ns for _, _, ns in part]                  # per-chunk no-speech prob
+            # Aggregate per-clip confidence stats (NaN-safe in case nothing was decoded).
+            lps = np.array(lps) if lps else np.array([np.nan])
+            rows.append(dict(filename=r.filename, split=r.split, label=r.label,
+                             duration=n / SR, n_chunks=len(nsp), text=" ".join(texts),
+                             asr_avg_lp=np.nanmean(lps),                # overall confidence
+                             asr_min_lp=np.nanmin(lps),                 # worst single token
+                             asr_p10_lp=np.nanpercentile(lps, 10),      # robust "low-confidence tail"
+                             asr_n_tok=int(np.isfinite(lps).sum()),     # amount of speech decoded
+                             asr_nospeech_max=max(nsp),
+                             asr_nospeech_mean=float(np.mean(nsp))))
+
+    # Clips are read in order and their chunks decoded together once a batch is full (--batch 1 = one chunk at a time).
+    group, n_chunks = [], 0
+    for r in tqdm(files.itertuples(), total=len(files)):
+        wav, sr = sf.read(DATA / ("test" if r.split == "test" else "train") / r.filename, dtype="float32")
+        wav = wav[:r.n]
+        assert sr == SR, f"{r.filename}: unexpected sample rate {sr}"
+        chunks = split_chunks(wav)
+        group.append((r, len(wav), chunks))
+        n_chunks += len(chunks)
+        if n_chunks >= args.batch:
+            flush(group)
+            group, n_chunks = [], 0
+    if group:
+        flush(group)
+
+    out = ART / (f"transcripts_{args.tag}_crops{''.join(map(str, args.crops))}" if args.crops
+                 else f"transcripts_{args.tag}")
+    out = out.with_name(out.name + (f"_shard{args.shard[0]}" if args.shard else "") + ".parquet")
     pd.DataFrame(rows).to_parquet(out, index=False)
     print(f"saved {out} ({len(rows)} clips, "
           f"peak VRAM {torch.cuda.max_memory_allocated() / 2**30:.2f} GB)")
