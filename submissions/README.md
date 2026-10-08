@@ -121,3 +121,8 @@ AUC 0.79 vs 0.83), and adding them to the main ridge improves every CV scheme in
 -0.0026, strict-topic -0.0024, speaker-grouped -0.0033). Submitted as a minimal change of the 0.3207 file (its raw predictions
 plus the blend difference, same corrections; correlation 0.9987): public 0.3247. The seventh change in a row that is better
 or equal in validation and worse on the public 60%; the 0.3207 file is a lucky local optimum of the public clips.
+
+**Ensemble of three blends** (`23_avg_15_14_20.csv`, **0.3195**, new best). Equal-weight average of the 3-model blend
+(0.3207), the 4-model Voxtral blend (0.3224) and the 3-model blend trained without score-0 clips (0.3242). For squared error,
+mean((a + b)/2 - y)^2 = (MSE_a + MSE_b)/2 - mean((a - b)^2)/4, so the score of an average follows from the components' public
+scores and their (label-free) differences; it was predicted at 0.3196 (and an earlier average, 19, at 0.3228 vs 0.3227 actual).

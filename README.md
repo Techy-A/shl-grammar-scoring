@@ -10,9 +10,9 @@ The model listens to 45–60 s of spontaneous spoken English and predicts a **0�
 
 | | |
 |---|---|
-| **Best public leaderboard** | **0.3207** (lower is better; #1 is 0.3064) |
-| **Training RMSE** (out-of-fold, speaker-grouped) | **0.516** |
-| **Training Pearson r** (out-of-fold) | **0.909** |
+| **Best public leaderboard** | **0.3195** (lower is better; #1 is 0.3064) |
+| **Training RMSE** (out-of-fold, speaker-grouped) | **0.510** |
+| **Training Pearson r** (out-of-fold) | **0.911** |
 | **Notebook + full report** | [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb) |
 | **Report (web page)** | [techy-a.github.io/shl-grammar-scoring/report](https://techy-a.github.io/shl-grammar-scoring/report/) |
 
@@ -29,7 +29,7 @@ flowchart LR
     E --> S[Ridge / SVR on<br/>pooled embeddings]
     V --> S
     E --> G{score-0 gate}
-    T2 & S --> B[non-negative blend]
+    T2 & S --> B[three non-negative blends<br/>averaged]
     G --> B
     B --> P[score 0–5<br/>minus 0.118 test bias<br/>full-length clips × 1.15]
 ```
@@ -59,7 +59,8 @@ Every clip is judged two ways:
 | v7 − 0.118 | remove measured test-set bias | 0.3262 |
 | full × 1.15 | stretch compressed full-length test predictions | 0.3241 |
 | + Voxtral | audio language model features; 4 models, one per kind of signal | 0.3224 |
-| **Ridge, 3 models** | **one Ridge on Voxtral + all audio encoders; 3 models, one per kind of signal** | **0.3207** |
+| Ridge, 3 models | one Ridge on Voxtral + all audio encoders; 3 models, one per kind of signal | 0.3207 |
+| **Ensemble** | **equal-weight average of three blends (3-model, 4-model, 3-model trained without the score-0 clips)** | **0.3195** |
 
 Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), end-to-end fine-tuning of DeBERTa and WavLM, stretching the short test clips, test-time augmentation over shifted audio windows, an LLM judge (Qwen3-8B) reading the transcripts against the rubric, LanguageTool error counts, Voxtral's upper layers, and an offset for one recording batch. The details are in [`submissions/README.md`](submissions/README.md).
 
