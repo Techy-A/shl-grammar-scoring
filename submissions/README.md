@@ -136,3 +136,19 @@ under topic-grouped (-0.0015) and strict-topic folds (-0.0031). The averaging id
 blend alone, against a CV-calibrated estimate of 0.329 to 0.342. Public 0.3234: by the identity the new blend alone would
 score about 0.354, so on the public clips these encoders do about 0.02 worse than validation predicts. The eighth
 validation-better change in a row that is worse publicly.
+
+**WavLM-large layer choice** (no submission). A public solution uses WavLM-large layer 20 alone, where our features average
+layers 8-16. Per-layer features (mean and std over time, layers 12-24) show the single upper layers are better on their own:
+SVR CV RMSE 0.585 at layer 20 (0.575 at 22) against 0.597, ridge 0.590 against 0.614. In the blends they are not: replacing
+the WavLM-large SVR with the layer-20 one makes all three blends worse (ensemble OOF metric 0.3414 to 0.3457, bootstrap
+P(better) = 0.02), the layer-20 features also make the combined audio ridge and the Voxtral + WavLM SVR worse, and added as an
+extra model the layer-20 SVR gets a blend weight of 0. The middle layers carry the acoustic detail that the Voxtral states
+lack; layer 20 overlaps with Voxtral. Our component scores, re-measured the way the public solution reports them (full-clip
+validation, the 732 clips scored 1-5, trained without the noise clips), match its numbers (Voxtral ridge 0.538 vs 0.535).
+
+**Clip to [2, 5]** (`25_ens_clip2.csv`, 0.3206, worse). A public solution clips its predictions to [2, 5] (only 4 of the 732
+scored training clips are below 2). On our out-of-fold predictions it helps every blend (ensemble metric 0.3414 to 0.3402,
+bootstrap P = 1.00), and none of the 12 test clips predicted below 2 looks like a noise recording (gate scores 1.8-2.8, train
+noise clips at most 0.41). Public 0.3206 against 0.3195: those slow, hesitant answers are scored low on the public clips too.
+A separate blend for the 45.06 s batch (90 train / 87 test clips) also helps in CV, mostly through its own offset (-0.0046),
+which the batch-offset probe (13) already rejected; with that offset removed the gain is -0.0012. Not submitted.
