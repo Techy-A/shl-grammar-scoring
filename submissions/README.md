@@ -126,3 +126,13 @@ or equal in validation and worse on the public 60%; the 0.3207 file is a lucky l
 (0.3207), the 4-model Voxtral blend (0.3224) and the 3-model blend trained without score-0 clips (0.3242). For squared error,
 mean((a + b)/2 - y)^2 = (MSE_a + MSE_b)/2 - mean((a - b)^2)/4, so the score of an average follows from the components' public
 scores and their (label-free) differences; it was predicted at 0.3196 (and an earlier average, 19, at 0.3228 vs 0.3227 actual).
+
+**Fourth blend on other encoders** (`24_avg4_w2v_member.csv`, 0.3234, worse). A 3-model blend on encoders the ensemble
+does not use (ridge on Qwen3-4B transcript embeddings, ridge on Qwen2-Audio + w2v-BERT 2.0, SVR on w2v-BERT 2.0), built
+with the notebook's pipeline (`03_train.py --crops`, `08_blend.py`; CV RMSE 0.529, Pearson 0.904). It differs from the
+ensemble by 0.19 per clip (RMS; the members differ from each other by 0.07 to 0.14), and as a fourth equal-weight member it
+improves the out-of-fold metric under speaker-grouped folds (0.3414 to 0.3398, bootstrap P = 0.85) and, in kernel form,
+under topic-grouped (-0.0015) and strict-topic folds (-0.0031). The averaging identity put the break-even at 0.3376 for the
+blend alone, against a CV-calibrated estimate of 0.329 to 0.342. Public 0.3234: by the identity the new blend alone would
+score about 0.354, so on the public clips these encoders do about 0.02 worse than validation predicts. The eighth
+validation-better change in a row that is worse publicly.
