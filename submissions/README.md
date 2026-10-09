@@ -160,3 +160,10 @@ CEFR classifier (ModernBERT, Apache-2.0) correlates 0.06-0.08 with the ensemble'
 (a CC BY-NC model was not used: the rules allow only licences that permit commercial use). Gemini 3.5 Flash Lite grading
 the audio zero-shot against the rubric (`src/16_gemini_judge.py`, free tier: 500 requests a day): Pearson 0.60 with the
 labels on 38 training clips, 0.74 with the ensemble and 0.05 with its residuals, so it adds nothing the ensemble lacks.
+
+**Fine-tuned text model + batch weights** (`26_ft_batchw.csv`, **0.3175**, new best, 3rd on the public leaderboard).
+The three blends each get the fine-tuned DeBERTa-v3-large text model (`06_finetune_text.py --crops --drop-zero`) as an extra
+model, and separate non-negative weights for the 45.06 s recording batch (90 train / 87 test clips), re-centred to the global
+blend's mean on the training batch so the batch gets no extra offset (a batch offset was rejected by probe 13). Out-of-fold
+ensemble metric 0.3414 -> 0.3390 (bootstrap P = 0.86). On the batch the blends drop the WavLM-large SVR and lean on the
+text models and the combined audio ridge. Same corrections as before (mean 3.228668, full-length clips x1.15).
