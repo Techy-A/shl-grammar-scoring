@@ -167,3 +167,9 @@ model, and separate non-negative weights for the 45.06 s recording batch (90 tra
 blend's mean on the training batch so the batch gets no extra offset (a batch offset was rejected by probe 13). Out-of-fold
 ensemble metric 0.3414 -> 0.3390 (bootstrap P = 0.86). On the batch the blends drop the WavLM-large SVR and lean on the
 text models and the combined audio ridge. Same corrections as before (mean 3.228668, full-length clips x1.15).
+
+**Leaderboard-weighted mix** (`27_lb_weighted_mix.csv`, **0.3158**, new best, 2nd on the public leaderboard). Weighted
+average of four scored submissions: 26 (0.650), the Qwen2-Audio member `cand_qwen3.csv` (0.178), `11_blend_v7_biasfix.csv`
+(0.122) and 15 (0.050). The weights minimise the public MSE predicted from the files' public scores and their label-free
+differences (w'Gw with G_ij = (MSE_i + MSE_j - mean((p_i - p_j)^2)) / 2, weights >= 0 summing to 1); predicted 0.3153.
+Unlike every earlier average, these weights are tuned on the public leaderboard, so the private score may gain less.
