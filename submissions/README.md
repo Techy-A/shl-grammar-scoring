@@ -178,3 +178,8 @@ Unlike every earlier average, these weights are tuned on the public leaderboard,
 weighting over more scored files picks up the batch-offset submission (13): 0.624 x 26, 0.200 x 13, 0.095 x the
 Qwen2-Audio member, 0.058 x 15, 0.023 x 11; predicted 0.3145. In effect a partial offset for the 45.06 s batch, which on
 its own (13) had made the score worse. Tuned on the public clips like 27.
+
+**RoBERTa-large instead of the DeBERTa fine-tune** (`29_roberta_batchw.csv`, 0.3225, worse). RoBERTa-large fine-tuned the
+same way (Kaggle 2x T4, `06_finetune_text.py --model roberta-large --crops --drop-zero`): RMSE 0.602 on the 732 scored
+clips, correlation 0.93 with the DeBERTa fine-tune. In place of it in each blend: out-of-fold metric 0.3390 to 0.3368
+(bootstrap P = 0.80), but public 0.3225 against 0.3175, and it adds nothing to the public-score weighting (weight 0.06).

@@ -64,6 +64,7 @@ def make_model():
 
 
 def main():
+    global MODEL   # --model replaces it for make_model() and the tokenizer
     ap = argparse.ArgumentParser()
     ap.add_argument("--folds", type=int, nargs="*", default=[0, 1, 2, 3, 4])
     ap.add_argument("--merge", action="store_true")
@@ -72,9 +73,12 @@ def main():
     ap.add_argument("--drop-zero", action="store_true",
                     help="train without the score-0 clips (noise recordings with invented fluent transcripts)")
     ap.add_argument("--epochs", type=int, default=EPOCHS)
+    ap.add_argument("--model", default=MODEL, help="another Hugging Face encoder, e.g. roberta-large")
     args = ap.parse_args()
-    prefix = "s4" + "c" * args.crops + "z" * args.drop_zero
-    name = NAME + "_crops" * args.crops + "_nozero" * args.drop_zero
+    other = args.model != MODEL   # a non-default encoder gets its own run name, e.g. s4_roberta-large_ft
+    MODEL, short = args.model, args.model.split("/")[-1]
+    prefix = "s4" + "c" * args.crops + "z" * args.drop_zero + f"_{short}" * other
+    name = (f"s4_{short}_ft" if other else NAME) + "_crops" * args.crops + "_nozero" * args.drop_zero
     if args.merge:
         return merge_folds(prefix, name, MODEL)
 
