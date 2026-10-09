@@ -14,6 +14,8 @@ Two modes:
   train : python src/06_finetune_text.py --folds 0 1 2    -> artifacts/s4_fold{k}.parquet
           (on Kaggle, 2 processes split the folds across the two T4s)
   merge : python src/06_finetune_text.py --merge          -> artifacts/pred_<name>.parquet + results.csv row
+  --crops (train on the test-length crop transcripts too, validate on them) and --drop-zero (train without the
+  score-0 clips) add _crops / _nozero to the run name; pass the same flags to --merge.
 """
 import argparse
 
@@ -65,13 +67,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--folds", type=int, nargs="*", default=[0, 1, 2, 3, 4])
     ap.add_argument("--merge", action="store_true")
+    ap.add_argument("--crops", action="store_true",
+                    help="also train on the test-length crop transcripts, validate on them (as 03_train.py --crops)")
+    ap.add_argument("--drop-zero", action="store_true",
+                    help="train without the score-0 clips (noise recordings with invented fluent transcripts)")
+    ap.add_argument("--epochs", type=int, default=EPOCHS)
     args = ap.parse_args()
+    prefix = "s4" + "c" * args.crops + "z" * args.drop_zero
+    name = NAME + "_crops" * args.crops + "_nozero" * args.drop_zero
     if args.merge:
-        return merge_folds("s4", NAME, MODEL)
+        return merge_folds(prefix, name, MODEL)
 
     df = pd.read_parquet(ART / f"transcripts_{TAG}.parquet")
+    if args.crops:
+        df = pd.concat([df, pd.read_parquet(ART / f"transcripts_{TAG}_crops.parquet")], ignore_index=True)
     folds = fold_of(df.filename, "gfold_s0")
-    t = AutoTokenizer.from_pretrained(MODEL)(df.text.tolist(), padding="max_length", truncation=True,
+    t = AutoTokenizer.from_pretrained(MODEL)(df.text.fillna("").tolist(), padding="max_length", truncation=True,
                                              max_length=MAX_LEN, return_tensors="pt")
     enc = {"input_ids": t.input_ids, "attention_mask": t.attention_mask}   # DeBERTa-v3 ignores token_type_ids
 
@@ -80,9 +91,26 @@ def main():
             b = idx[i:i + BS]
             yield {k: v[b].to("cuda") for k, v in enc.items()}, torch.from_numpy(y[b]).cuda()
 
+    is_test, is_crop = (df.split == "test").values, df.split.str.startswith("crop").values
+    keep = (df.label.fillna(0).values > 0) if args.drop_zero else np.ones(len(df), bool)
+
+    def rows(k):   # train: full clips (+ crops) of the other folds; val: fold k (its crops with --crops); test: full
+        val = (is_crop if args.crops else ~is_test) & (folds == k)
+        return np.where(~is_test & (folds != k) & keep)[0], np.where(val & ~is_test)[0], np.where(is_test)[0]
+
+    def save(k):   # validation crops -> mean per clip, so the OOF is one row per train clip (as 03_train.py --crops)
+        def out(model):
+            _, va, te = rows(k)
+            v = pd.DataFrame({"filename": df.filename.values[va], "pred": predict(model, enc, va)})
+            v = v.groupby("filename", as_index=False).pred.mean().assign(split="train")
+            t_ = pd.DataFrame({"filename": df.filename.values[te], "split": "test", "pred": predict(model, enc, te)})
+            pd.concat([v, t_])[["filename", "split", "pred"]].to_parquet(ART / f"{prefix}_fold{k}.parquet", index=False)
+        return out
+
+    custom = args.crops or args.drop_zero
     for k in args.folds:
         finetune_fold(k, df, folds, make_model, train_batches, lambda m, idx: predict(m, enc, idx),
-                      EPOCHS, BS, "s4")
+                      args.epochs, BS, prefix, rows=rows if custom else None, save=save(k) if custom else None)
 
 
 if __name__ == "__main__":

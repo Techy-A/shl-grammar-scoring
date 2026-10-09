@@ -152,3 +152,11 @@ bootstrap P = 1.00), and none of the 12 test clips predicted below 2 looks like 
 noise clips at most 0.41). Public 0.3206 against 0.3195: those slow, hesitant answers are scored low on the public clips too.
 A separate blend for the 45.06 s batch (90 train / 87 test clips) also helps in CV, mostly through its own offset (-0.0046),
 which the batch-offset probe (13) already rejected; with that offset removed the gain is -0.0012. Not submitted.
+
+**Fine-tuned text model, CEFR classifiers, Gemini grader** (no submission). DeBERTa-v3-large fine-tuned on the
+transcripts (test-length crops, no score-0 clips, 5 folds on a free Colab T4): RMSE 0.592 on the 732 scored clips, the
+same as the frozen DeBERTa ridge; added to the blends, ensemble OOF metric -0.0016 (bootstrap P = 0.81). A document-level
+CEFR classifier (ModernBERT, Apache-2.0) correlates 0.06-0.08 with the ensemble's residuals under topic-grouped folds
+(a CC BY-NC model was not used: the rules allow only licences that permit commercial use). Gemini 3.5 Flash Lite grading
+the audio zero-shot against the rubric (`src/16_gemini_judge.py`, free tier: 500 requests a day): Pearson 0.60 with the
+labels on 38 training clips, 0.74 with the ensemble and 0.05 with its residuals, so it adds nothing the ensemble lacks.

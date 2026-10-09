@@ -43,7 +43,7 @@ DTYPE = (torch.float32 if not torch.cuda.is_available() or "GTX 16" in torch.cud
 AMP = DTYPE == torch.float16   # mixed-precision training only where fp16 works (Kaggle T4)
 
 
-def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix):
+def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix, rows=None, save=None):
     """Training loop shared by 06_finetune_text.py and 07_finetune_audio.py, for fold k.
 
     make_model() -> (model, AdamW param groups); built after seeding, so each fold is reproducible.
@@ -51,13 +51,13 @@ def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix
     predict(model, idx) -> scores on the 0-5 scale.
     Targets are label / 5 (in [0, 1]), MSE loss. A fixed number of epochs, no early stopping, so the
     out-of-fold predictions stay honest. Writes artifacts/<prefix>_fold{k}.parquet (val + test rows).
+    rows(k) -> (train, val, test) row indices and save(model) replace the default row choice and output.
     """
     torch.manual_seed(k)
     rng = np.random.default_rng(k)
     is_tr = (df.split == "train").values
-    tr_idx = np.where(is_tr & (folds != k))[0]
-    va_idx = np.where(is_tr & (folds == k))[0]
-    te_idx = np.where(~is_tr)[0]
+    tr_idx, va_idx, te_idx = rows(k) if rows else (np.where(is_tr & (folds != k))[0], np.where(is_tr & (folds == k))[0],
+                                                   np.where(~is_tr)[0])
     y = (df.label.fillna(0).values / 5).astype(np.float32)
 
     model, groups = make_model()
@@ -81,6 +81,8 @@ def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix
         p = np.clip(predict(model, va_idx), 0, 5)
         print(f"fold {k} epoch {ep}: val RMSE {np.sqrt(np.mean((p - df.label.values[va_idx]) ** 2)):.4f}", flush=True)
 
+    if save:
+        return save(model)
     idx = np.r_[va_idx, te_idx]
     pd.DataFrame({"filename": df.filename.values[idx], "split": df.split.values[idx],
                   "pred": predict(model, idx)}).to_parquet(ART / f"{prefix}_fold{k}.parquet", index=False)
