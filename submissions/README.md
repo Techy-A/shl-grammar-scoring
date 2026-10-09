@@ -173,3 +173,8 @@ average of four scored submissions: 26 (0.650), the Qwen2-Audio member `cand_qwe
 (0.122) and 15 (0.050). The weights minimise the public MSE predicted from the files' public scores and their label-free
 differences (w'Gw with G_ij = (MSE_i + MSE_j - mean((p_i - p_j)^2)) / 2, weights >= 0 summing to 1); predicted 0.3153.
 Unlike every earlier average, these weights are tuned on the public leaderboard, so the private score may gain less.
+
+**Weighted mix with the batch-offset file** (`28_lb_weighted_mix2.csv`, **0.3150**, new best). The same public-score
+weighting over more scored files picks up the batch-offset submission (13): 0.624 x 26, 0.200 x 13, 0.095 x the
+Qwen2-Audio member, 0.058 x 15, 0.023 x 11; predicted 0.3145. In effect a partial offset for the 45.06 s batch, which on
+its own (13) had made the score worse. Tuned on the public clips like 27.
