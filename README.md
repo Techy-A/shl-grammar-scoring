@@ -10,9 +10,10 @@ The model listens to 45–60 s of spontaneous spoken English and predicts a **0�
 
 | | |
 |---|---|
-| **Best public leaderboard** | **0.3195** (lower is better; #1 is 0.3064) |
-| **Training RMSE** (out-of-fold, speaker-grouped) | **0.510** |
-| **Training Pearson r** (out-of-fold) | **0.911** |
+| **Best public leaderboard** | **0.3158** (lower is better; #1 is 0.3064) |
+| **Main model alone** | 0.3175 (no weights tuned on the leaderboard) |
+| **Training RMSE** (out-of-fold, speaker-grouped) | **0.507** |
+| **Training Pearson r** (out-of-fold) | **0.913** |
 | **Notebook + full report** | [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb) |
 | **Report (web page)** | [techy-a.github.io/shl-grammar-scoring/report](https://techy-a.github.io/shl-grammar-scoring/report/) |
 
@@ -25,13 +26,15 @@ flowchart LR
     A[audio clip] --> W[Whisper-large-v3-turbo<br/>verbatim prompt]
     A --> E[WavLM · WavLM-large<br/>Whisper encoder]
     W --> T2[DeBERTa-v3-large embeddings<br/>Ridge]
+    W --> FT[DeBERTa-v3-large<br/>fine-tuned regressor]
     A --> V[Voxtral-Mini-3B<br/>audio language model]
     E --> S[Ridge / SVR on<br/>pooled embeddings]
     V --> S
     E --> G{score-0 gate}
-    T2 & S --> B[three non-negative blends<br/>averaged]
+    T2 & FT & S --> B[three non-negative blends<br/>own weights for the 45 s batch<br/>averaged]
     G --> B
     B --> P[score 0–5<br/>minus 0.118 test bias<br/>full-length clips × 1.15]
+    P --> F[final: weighted average<br/>with three earlier submissions]
 ```
 
 Every clip is judged two ways:
@@ -40,6 +43,8 @@ Every clip is judged two ways:
 - **How it was said.** Frozen speech encoders capture fluency, rhythm and pronunciation. This turned out to be the strongest signal.
 - **Heard by a language model.** Voxtral-Mini-3B, an audio language model, listens to the clip directly, so it hears errors that the transcript may have smoothed over. Its hidden states, combined with the WavLM, WavLM-large and Whisper-encoder embeddings in one Ridge, are the best single model (CV RMSE 0.538). The idea of using an audio language model this way comes from another participant's public solution.
 - **Score-0 gate.** The WavLM model separates all 37 score-0 training clips perfectly (they are loud broadband noise with faint speech underneath, i.e. unusable recordings), so those clips are set to exactly 0.
+- **A fine-tuned text model and a separate weighting for one recording batch.** Each blend also includes DeBERTa-v3-large fine-tuned as a regressor on the transcripts (trained on test-length crop transcripts, without the score-0 clips). The 45.06 s recording batch, 12% of the training clips but 40% of the test clips, gets its own blend weights, re-centred so that it gets no extra offset. Together: out-of-fold 0.510 → 0.507, public 0.3195 → 0.3175.
+- **Final average.** The submission is a weighted average of the main model (0.650) and three earlier submissions. The weights minimise the public error predicted from the files' public scores and their label-free differences (predicted 0.3153, scored 0.3158), so this last step is tuned to the public 60% of the test clips.
 
 ## Three things that mattered more than any model
 
@@ -60,9 +65,11 @@ Every clip is judged two ways:
 | full × 1.15 | stretch compressed full-length test predictions | 0.3241 |
 | + Voxtral | audio language model features; 4 models, one per kind of signal | 0.3224 |
 | Ridge, 3 models | one Ridge on Voxtral + all audio encoders; 3 models, one per kind of signal | 0.3207 |
-| **Ensemble** | **equal-weight average of three blends (3-model, 4-model, 3-model trained without the score-0 clips)** | **0.3195** |
+| Ensemble | equal-weight average of three blends (3-model, 4-model, 3-model trained without the score-0 clips) | 0.3195 |
+| + fine-tuned text | fine-tuned DeBERTa-v3-large in each blend; own blend weights for the 45 s batch | 0.3175 |
+| **Weighted average** | **the main model with three earlier submissions, weights from their public scores** | **0.3158** |
 
-Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), end-to-end fine-tuning of DeBERTa and WavLM, stretching the short test clips, test-time augmentation over shifted audio windows, an LLM judge (Qwen3-8B) reading the transcripts against the rubric, LanguageTool error counts, Voxtral's upper layers, and an offset for one recording batch. The details are in [`submissions/README.md`](submissions/README.md).
+Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), a length correction, grammar-error features (T5 corrector, CoLA, GPT-2 perplexity), end-to-end fine-tuning of WavLM, stretching the short test clips, test-time augmentation over shifted audio windows, an LLM judge (Qwen3-8B) reading the transcripts against the rubric, LanguageTool error counts, Voxtral's upper layers, an offset for one recording batch, WavLM-large's layer 20 alone, clipping predictions to [2, 5], a CEFR text-difficulty classifier, and Gemini grading the audio zero-shot (`src/16_gemini_judge.py`). The details are in [`submissions/README.md`](submissions/README.md).
 
 ## Pipeline
 
@@ -74,14 +81,15 @@ Tried and dropped: rounding to the 0.5 label grid (−0.02 on the leaderboard), 
 | `src/05_audio_embed.py` | frozen WavLM / Whisper-encoder embeddings (full clips and crops) |
 | `src/11_voxtral_embed.py` | Voxtral-Mini-3B hidden states over the audio (full clips and crops) |
 | `src/10_speaker_folds.py` | speaker-grouped CV folds |
+| `src/06_finetune_text.py` | DeBERTa-v3-large fine-tuned on the transcripts (`--crops --drop-zero`) |
 | `src/03_train.py` | CV training of LightGBM / Ridge / SVR on any feature tables |
-| `src/08_blend.py` | score-0 gate + non-negative blend → `artifacts/submission.csv` |
+| `src/08_blend.py` | score-0 gate + non-negative blend (`--batch`: own weights for the 45 s batch) → `artifacts/submission.csv` |
 
 `src/common.py` holds paths and precision settings, so the same scripts run locally and on Kaggle. Each script caches its output in `artifacts/` for the next step.
 
 ## Reproducing the results
 
-**On Kaggle (easiest).** Attach the competition data and run the notebook on a 2× T4 GPU. It rebuilds everything from raw audio in about 3 hours and writes `submission.csv`.
+**On Kaggle (easiest).** Attach the competition data and run the notebook on a 2× T4 GPU. It rebuilds everything from raw audio in about 3.5 hours and writes `submission.csv` (the final average also reads two earlier submission files from `submissions/`).
 
 **Locally.** Put the competition's `Dataset_Final/` under `data/`, then:
 
