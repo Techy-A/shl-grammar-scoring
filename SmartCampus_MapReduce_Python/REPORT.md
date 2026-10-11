@@ -1,8 +1,10 @@
 ---
 title: "Smart Campus Analytics using Python Hadoop Streaming"
 subtitle: "MapReduce Laboratory: Mini Project Report"
-author: "Aryan Awasthi"
-date: "October 2026"
+author:
+  - "Aryan Awasthi"
+  - "Roll No.: 102315182"
+  - "Subgroup: 402"
 ---
 
 # 1. Problem Understanding and Assumptions
@@ -40,31 +42,30 @@ while the key stays the same, and print it when the key changes.
 
 # 2. Project Structure
 
-```
-SmartCampus_MapReduce_Python/
-├── data/            wifi_logs.csv  canteen.csv  library.csv  transport.csv
-├── src/             job1..job6 mappers and reducers (19 files) + job1_wifi_combiner.py
-├── scripts/         generate_data.py  verify.py  top_n.py  compare_combiner.sh
-├── output/          results of every job (produced by run_local.sh)
-├── run_local.sh     runs all jobs locally:  map | sort | [combine] | reduce
-└── run_hadoop.sh    the same jobs on a cluster with hadoop-streaming.jar
-```
+| Folder / file | Contents |
+|------------------|----------------------------------------------|
+| data/ | wifi_logs.csv, canteen.csv, library.csv, transport.csv |
+| src/ | Mappers and reducers for Jobs 1 to 6 (19 files) and job1_wifi_combiner.py |
+| scripts/ | generate_data.py, verify.py, top_n.py, compare_combiner.sh |
+| output/ | Results of every job (produced by run_local.sh) |
+| run_local.sh | Runs all jobs locally: map, sort, combine, reduce |
+| run_hadoop.sh | Runs the same jobs on a cluster with hadoop-streaming.jar |
 
 To run: `./run_local.sh` then `python3 scripts/verify.py`. For a cluster: `./run_hadoop.sh`.
 
 # 3. Job Design
 
-| Job | Stage | Mapper output (key → value) | Reducer output |
+| Job | Stage | Mapper output (key -> value) | Reducer output |
 |------|----|--------------|--------------|
-| 1 Peak Wi-Fi | 1 | `YYYY-MM-DD-HH` → `DataMB,DurationMin,1` | `TotalDataMB, TotalDurationMin, Sessions` per hour |
-| 2 Access point | 1 | `AccessPoint` → `DataMB,DurationMin,1` | totals, `Sessions`, `AvgSessionMin` = duration ÷ sessions |
-| 3 Canteen items | 1 | `Item` → `Quantity,Amount` | `TotalQuantity, TotalRevenue` |
-| 4 Co-purchase | 1 | `TransactionID` → `Item` | every sorted pair A\|B → `1` |
-| | 2 | A\|B → `1` (identity) | `Transactions` = number of transactions containing the pair |
-| 5 Library anomaly | 1 | `StudentID` → `Duration,1` (ENTRY rows) | `StudentID` → `TotalMin,Visits` |
-| | 2 (global) | `ALL` → `TotalMin,Visits` | `OverallAvgMin` |
-| | 3 (filter) | `StudentID` → `Avg,Overall,Ratio`, emitted only if Avg > 1.5 × Overall | report line with `Flag=ANOMALY` |
-| 6 Transport | 1 | `RouteID-HH` → `Speed,1` | `AvgSpeedKmph, Readings, Status` (CONGESTED if < 20) |
+| 1 Peak Wi-Fi | 1 | `YYYY-MM-DD-HH` -> `DataMB,DurationMin,1` | `TotalDataMB, TotalDurationMin, Sessions` per hour |
+| 2 Access point | 1 | `AccessPoint` -> `DataMB,DurationMin,1` | totals, `Sessions`, `AvgSessionMin` = duration ÷ sessions |
+| 3 Canteen items | 1 | `Item` -> `Quantity,Amount` | `TotalQuantity, TotalRevenue` |
+| 4 Co-purchase | 1 | `TransactionID` -> `Item` | every sorted pair A\|B -> `1` |
+| | 2 | A\|B -> `1` (identity) | `Transactions` = number of transactions containing the pair |
+| 5 Library anomaly | 1 | `StudentID` -> `Duration,1` (ENTRY rows) | `StudentID` -> `TotalMin,Visits` |
+| | 2 (global) | `ALL` -> `TotalMin,Visits` | `OverallAvgMin` |
+| | 3 (filter) | `StudentID` -> `Avg,Overall,Ratio`, emitted only if Avg > 1.5 × Overall | report line with `Flag=ANOMALY` |
+| 6 Transport | 1 | `RouteID-HH` -> `Speed,1` | `AvgSpeedKmph, Readings, Status` (CONGESTED if < 20) |
 
 **Combiner.** `job1_wifi_combiner.py` adds up the comma-separated numbers for each key and
 outputs them in the mapper's own format. The reducer therefore accepts its output unchanged.
@@ -88,7 +89,7 @@ directly from the CSVs without MapReduce. **All six jobs match (PASS).**
 
 ## Job 1: Peak Wi-Fi Usage (64 hourly keys)
 
-| Rank | Hour | TotalDataMB | TotalDurationMin | Sessions |
+| Rank | Hour | Total Data (MB) | Total Duration (min) | Sessions |
 |---|---|---|---|---|
 | **1 (peak)** | **2026-08-12 11:00** | **7,872.10** | **1,744** | **27** |
 | 2 | 2026-08-10 11:00 | 6,469.60 | 1,784 | 26 |
@@ -100,7 +101,7 @@ and to avoid for scheduling large software updates.
 
 ## Job 2: Access Point Utilisation
 
-| AP | TotalDataMB | TotalDurationMin | Sessions | AvgSessionMin |
+| Access Point | Total Data (MB) | Total Duration (min) | Sessions | Avg Session (min) |
 |---|---|---|---|---|
 | AP01 | 32,703.20 | 10,909 | 175 | 62.34 |
 | AP02 | 15,300.80 | 4,996 | 78 | 64.05 |
@@ -118,13 +119,18 @@ change that would help most.
 
 ## Job 3: Canteen Item Frequency
 
-| Item | Qty | Revenue (₹) | | Item | Qty | Revenue (₹) |
-|---|---|---|---|---|---|---|
-| **Burger** | 92 | **11,040** | | Muffin | 83 | 3,735 |
-| Pasta | 68 | 9,520 | | Juice | **120** | 6,000 |
-| Sandwich | 97 | 7,760 | | Coffee | 112 | 4,480 |
-| Noodles | 58 | 6,380 | | Tea | 74 | 1,480 |
-| Water | 67 | 1,340 | | Samosa | 64 | 960 |
+| Rank | Item | Quantity Sold | Revenue (Rs.) |
+|---|---|---|---|
+| 1 | **Burger** | 92 | **11,040** |
+| 2 | Pasta | 68 | 9,520 |
+| 3 | Sandwich | 97 | 7,760 |
+| 4 | Noodles | 58 | 6,380 |
+| 5 | Juice | **120** | 6,000 |
+| 6 | Coffee | 112 | 4,480 |
+| 7 | Muffin | 83 | 3,735 |
+| 8 | Tea | 74 | 1,480 |
+| 9 | Water | 67 | 1,340 |
+| 10 | Samosa | 64 | 960 |
 
 *Interpretation:* Juice and Coffee sell the most units, but Burger and Pasta bring in the most
 revenue. Ranking items by quantity alone would understate the importance of the high-value items.
@@ -188,7 +194,7 @@ slowest route overall and is congested in both rush hours. Adding R04 buses at 0
 |------|------|--------|------------|
 | Job 1: Peak Wi-Fi | `YYYY-MM-DD-HH` | TotalDataMB, TotalDurationMin, Sessions | Peak = **2026-08-12-11**: 7,872.10 MB, 1,744 min, 27 sessions |
 | Job 2: Access Point | `AccessPoint` | TotalDataMB, TotalDurationMin, Sessions, AvgSessionMin | Busiest = **AP03**: 34,825.60 MB, 11,291 min, 181 sessions, 62.38 min avg |
-| Job 3: Canteen | `Item` | TotalQuantity, TotalRevenue | Top revenue **Burger** ₹11,040 (92 units); top quantity **Juice** (120) |
+| Job 3: Canteen | `Item` | TotalQuantity, TotalRevenue | Top revenue **Burger** Rs. 11,040 (92 units); top quantity **Juice** (120) |
 | Job 4: Co-Purchase | ItemA\|ItemB (sorted) | Number of transactions | Top pair **Burger + Juice** = 42 transactions |
 | Job 5: Library | `StudentID` | AvgVisitMin, Ratio, ANOMALY flag | Overall avg 92.10 min; **S107, S123, S131, S148** flagged |
 | Job 6: Transport | `RouteID-HH` | AvgSpeedKmph, Status | 14 / 70 route-hours congested; worst **R04-08** = 13.08 km/h |
@@ -233,10 +239,10 @@ get total data, total duration and number of sessions, and computes average sess
 total duration ÷ sessions.
 
 **Q6. For Job 4, explain how you will generate every unique pair of products within a transaction.**
-Stage 1 mapper emits `TransactionID → Item`, so all items of one basket meet in one reducer
+Stage 1 mapper emits `TransactionID -> Item`, so all items of one basket meet in one reducer
 call. The reducer puts them in a **set** (removing duplicates), **sorts** them, and generates
 every 2-combination with `itertools.combinations(sorted_items, 2)`, i.e. a double loop
-`i < j`. For n items this gives n(n−1)/2 pairs, each emitted as `A|B → 1`. Stage 2 adds up the
+`i < j`. For n items this gives n(n-1)/2 pairs, each emitted as `A|B -> 1`. Stage 2 adds up the
 1s for each pair.
 
 **Q7. Why must the product pair be sorted, e.g., (Coffee, Sandwich) rather than sometimes (Sandwich, Coffee)?**
@@ -245,9 +251,9 @@ different keys, may go to different reducers, and would each hold part of the co
 the pair in one fixed (alphabetical) order makes it a single key, so the count is complete.
 
 **Q8. For Job 5, how will you compute the overall average using more than one MapReduce job?**
-1. **Stage 1** (StudentID → duration,1): reducer outputs `StudentID → total_min, visits`.
+1. **Stage 1** (StudentID -> duration,1): reducer outputs `StudentID -> total_min, visits`.
 2. **Global stage**: the mapper re-keys every student record to the single key `ALL`. The
-   reducer adds the totals and visits and outputs `OverallAvg = Σtotal ÷ Σvisits`. This is the
+   reducer adds the totals and visits and outputs `OverallAvg = sum(total) / sum(visits)`. This is the
    exact average over all visits, not an average of averages. A combiner keeps the single
    reducer's input small.
 3. **Filter stage**: the overall average file is sent to every mapper (distributed cache
@@ -299,7 +305,7 @@ daily profile, ready for per-route reports. In Hadoop Streaming this needs no Ja
 `-D mapreduce.partition.keypartitioner.options=-k1,1` (used in `run_hadoop.sh`).
 If routes are very unequal in size, a **range or lookup partitioner** that assigns known busy
 routes to their own reducers (or partitions by hour during rush periods) balances the load
-better. Routes are few, so R ≤ number of routes is sensible.
+better. Routes are few, so R at most the number of routes is sensible.
 
 **Q14. What changes are necessary if the input contains malformed records?**
 Parse defensively in the mapper: use the `csv` module, skip blank and header lines, check the
@@ -313,7 +319,7 @@ section 4.
 
 **Q15. Suggest one additional campus analytics problem that can be solved using MapReduce.**
 **Student engagement / at-risk detection.** Join Wi-Fi, library and canteen activity per
-student per week. The mapper emits `StudentID-Week → source:measure`, and a reducer-side join
+student per week. The mapper emits `StudentID-Week -> source:measure`, and a reducer-side join
 builds a weekly activity vector. A second job compares each student's week with their own
 history and flags sudden drops in campus presence, so student-support services can reach out
 early. A simpler alternative is **classroom occupancy estimation**: count distinct students per
@@ -323,7 +329,7 @@ access point per lecture slot, and compare with room capacity to find over-booke
 
 | Question | Answer |
 |----------|------------------------------|
-| Three major phases of MapReduce? | **Map** (records → key-value pairs), **Shuffle & Sort** (partition, transfer and sort by key, group values), **Reduce** (aggregate each key group). |
+| Three major phases of MapReduce? | **Map** (records -> key-value pairs), **Shuffle & Sort** (partition, transfer and sort by key, group values), **Reduce** (aggregate each key group). |
 | Mapper output vs Reducer output? | Mapper output is intermediate, unsorted per record, written to local disk and shuffled. Reducer output is the final result per key, written to HDFS (`part-*` files). |
 | Why sort Mapper output before the Reducer? | So all values of a key arrive together and the reducer can process one key group at a time with a single pass and little memory. It also gives output sorted by key. |
 | What is a Combiner; when is it safe? | A "mini-reducer" run on each mapper's local output to reduce shuffle volume. Safe only for associative and commutative operations whose output matches the mapper's output format. It may run 0, 1 or many times, so results must not depend on it. |
@@ -344,10 +350,10 @@ access point per lecture slot, and compare with room capacity to find over-booke
 | Challenge | Status / evidence |
 |----------|------------------------------|
 | Combiner for the Wi-Fi job | `src/job1_wifi_combiner.py`, used for Jobs 1-3, 4-s2, 5, 6. |
-| Top three hours instead of all | `scripts/top_n.py` → `output/job1_top3_hours.txt` (section 4). |
+| Top three hours instead of all | `scripts/top_n.py` -> `output/job1_top3_hours.txt` (section 4). |
 | Custom partitioner for transport | `KeyFieldBasedPartitioner` on RouteID in `run_hadoop.sh` (Q13). |
 | Malformed records + rejected count | 2 / 2 / 2 / 1 rejected, Hadoop counters, `output/rejected_records.txt`. |
-| With vs without combiner | Over 4 simulated map tasks, Job 1 shuffles **700 → 67** records (−90%) with identical output. The combiner pre-adds each hour inside each map task, so only one record per (map task, hour) crosses the network. |
+| With vs without combiner | Over 4 simulated map tasks, Job 1 shuffles from **700 to 67** records (90% fewer) with identical output. The combiner pre-adds each hour inside each map task, so only one record per (map task, hour) crosses the network. |
 | Multiple reducers | Job 1 with 3 hash-partitioned reducers (23/19/22 keys) merges to output **identical** to 1 reducer. |
 
 # 9. Conclusion
