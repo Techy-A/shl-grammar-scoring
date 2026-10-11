@@ -13,7 +13,7 @@ md("""# CASMI26: a validation set that behaves like the hidden test
 - The visible `test.parquet` is copied from **`enveda-180`**, a library of mostly drug-like synthetic compounds. The hidden test is natural-product-like. A score on the visible file says little about the leaderboard.
 - `enveda-np-examples` is the only training library that is **both natural-product-like and measured on timsTOF**, the test instrument. Its 250 molecules make a natural validation set.
 - Removing a molecule's spectra from the reference library **simulates the three novelty classes**, so every idea can be scored per class instead of in one blended number.
-- A plain cosine library search scores **MRR 0.94 on class 1 and 0.00 on classes 2/3**, in about 3 minutes. Its public leaderboard score then shows roughly **how much of the hidden test is class 1**.
+- A plain cosine library search scores **MRR 0.94 on class 1 and 0.00 on classes 2/3**, in about 3 minutes. Its public leaderboard score is **0.150**, which means only about **16% of the public test is class 1**. Roughly 84% of the available score is in classes 2/3.
 
 Everything here is CPU only, needs no external data, and produces a valid submission."""),
 md("## Setup\nAll helper code is in the next cell: mass arithmetic, peak cleaning, a greedy cosine, the library index, MRR@25 and the novelty-class split."),
@@ -105,10 +105,12 @@ for th in (0.5, 0.6, 0.7):
     hit = res.top_score >= th
     print(f'cosine >= {th}: flags {hit.mean():.0%} of molecules, {(res.novelty[hit] == 1).mean():.0%} of them truly class 1')"""),
 md("""## 5. What this means for the leaderboard
-If cosine search reaches MRR ≈ 0.94 on class 1 and 0 elsewhere, its leaderboard score is about `0.94 × (share of class 1)`. Submitting this notebook shows that share for the public test, and so how much of the score is left in classes 2/3."""),
+If cosine search reaches MRR ≈ 0.94 on class 1 and 0 elsewhere, its leaderboard score is about `0.94 × (share of class 1)`. This notebook scores **0.150** on the public leaderboard, so about **0.150 / 0.94 ≈ 16%** of the public test molecules are class 1.
+
+That changes the priorities. A perfect class-1 search is worth at most ~0.16. **Everything above that has to come from molecules with no reference spectra.**"""),
 code("""c1 = res.loc[res.novelty == 1, 'rr'].mean()
-for lb in (0.15, 0.20, 0.25, 0.30):
-    print(f'public LB {lb:.2f}  ->  about {lb / c1:.0%} of public test molecules are class 1')"""),
+for lb in (0.150,):   # this notebook's public LB score
+    print(f'public LB {lb:.3f} / class-1 MRR {c1:.3f}  ->  about {lb / c1:.0%} of public test molecules are class 1')"""),
 md("## 6. Submission\nThe same search against the *full* training library (all ten test adducts, nothing held out)."),
 code("""del val_lib   # free memory before building the full library
 t = time.time()
