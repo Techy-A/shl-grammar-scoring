@@ -1,0 +1,14 @@
+R01-08	AvgSpeedKmph=17.84,Readings=15,Status=CONGESTED
+R01-17	AvgSpeedKmph=19.03,Readings=15,Status=CONGESTED
+R02-08	AvgSpeedKmph=15.29,Readings=15,Status=CONGESTED
+R02-09	AvgSpeedKmph=18.26,Readings=15,Status=CONGESTED
+R02-17	AvgSpeedKmph=16.96,Readings=15,Status=CONGESTED
+R02-18	AvgSpeedKmph=19.16,Readings=15,Status=CONGESTED
+R03-08	AvgSpeedKmph=18.83,Readings=15,Status=CONGESTED
+R04-08	AvgSpeedKmph=13.08,Readings=15,Status=CONGESTED
+R04-09	AvgSpeedKmph=15.37,Readings=15,Status=CONGESTED
+R04-17	AvgSpeedKmph=14.57,Readings=15,Status=CONGESTED
+R04-18	AvgSpeedKmph=16.17,Readings=15,Status=CONGESTED
+R05-08	AvgSpeedKmph=16.86,Readings=15,Status=CONGESTED
+R05-09	AvgSpeedKmph=19.72,Readings=15,Status=CONGESTED
+R05-17	AvgSpeedKmph=18.10,Readings=15,Status=CONGESTED

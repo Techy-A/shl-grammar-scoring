@@ -1,0 +1,3 @@
+2026-08-12-11	TotalDataMB=7872.10,TotalDurationMin=1744.00,Sessions=27
+2026-08-10-11	TotalDataMB=6469.60,TotalDurationMin=1784.00,Sessions=26
+2026-08-11-11	TotalDataMB=6130.50,TotalDurationMin=1327.00,Sessions=22

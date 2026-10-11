@@ -1,0 +1,68 @@
+== Job 1: Peak Wi-Fi usage per hour
+Peak hour:
+2026-08-12-11	TotalDataMB=7872.10,TotalDurationMin=1744.00,Sessions=27
+Top 3 hours:
+2026-08-12-11	TotalDataMB=7872.10,TotalDurationMin=1744.00,Sessions=27
+2026-08-10-11	TotalDataMB=6469.60,TotalDurationMin=1784.00,Sessions=26
+2026-08-11-11	TotalDataMB=6130.50,TotalDurationMin=1327.00,Sessions=22
+
+== Job 2: Access point utilisation
+AP01	TotalDataMB=32703.20,TotalDurationMin=10909.00,Sessions=175,AvgSessionMin=62.34
+AP02	TotalDataMB=15300.80,TotalDurationMin=4996.00,Sessions=78,AvgSessionMin=64.05
+AP03	TotalDataMB=34825.60,TotalDurationMin=11291.00,Sessions=181,AvgSessionMin=62.38
+AP04	TotalDataMB=12753.00,TotalDurationMin=4100.00,Sessions=64,AvgSessionMin=64.06
+AP05	TotalDataMB=14845.80,TotalDurationMin=4966.00,Sessions=85,AvgSessionMin=58.42
+AP06	TotalDataMB=8939.40,TotalDurationMin=2547.00,Sessions=39,AvgSessionMin=65.31
+AP07	TotalDataMB=6735.10,TotalDurationMin=2028.00,Sessions=34,AvgSessionMin=59.65
+AP08	TotalDataMB=8359.90,TotalDurationMin=2631.00,Sessions=44,AvgSessionMin=59.80
+
+== Job 3: Canteen item frequency
+Burger	TotalQuantity=92,TotalRevenue=11040.00
+Coffee	TotalQuantity=112,TotalRevenue=4480.00
+Juice	TotalQuantity=120,TotalRevenue=6000.00
+Muffin	TotalQuantity=83,TotalRevenue=3735.00
+Noodles	TotalQuantity=58,TotalRevenue=6380.00
+Pasta	TotalQuantity=68,TotalRevenue=9520.00
+Samosa	TotalQuantity=64,TotalRevenue=960.00
+Sandwich	TotalQuantity=97,TotalRevenue=7760.00
+Tea	TotalQuantity=74,TotalRevenue=1480.00
+Water	TotalQuantity=67,TotalRevenue=1340.00
+
+== Job 4: Co-purchased item pairs (2 stages)
+Top 5 pairs:
+Burger|Juice	Transactions=42
+Coffee|Sandwich	Transactions=36
+Juice|Pasta	Transactions=33
+Samosa|Tea	Transactions=31
+Coffee|Muffin	Transactions=28
+
+== Job 5: Library usage anomaly (3 stages)
+OverallAvgMin	92.1000
+TotalDurationMin	14736.00
+Visits	160
+S107	AvgVisitMin=181.83,OverallAvgMin=92.10,Ratio=1.97x,Flag=ANOMALY
+S123	AvgVisitMin=205.11,OverallAvgMin=92.10,Ratio=2.23x,Flag=ANOMALY
+S131	AvgVisitMin=218.00,OverallAvgMin=92.10,Ratio=2.37x,Flag=ANOMALY
+S148	AvgVisitMin=223.43,OverallAvgMin=92.10,Ratio=2.43x,Flag=ANOMALY
+
+== Job 6: Transport congestion per route-hour
+R01-08	AvgSpeedKmph=17.84,Readings=15,Status=CONGESTED
+R01-17	AvgSpeedKmph=19.03,Readings=15,Status=CONGESTED
+R02-08	AvgSpeedKmph=15.29,Readings=15,Status=CONGESTED
+R02-09	AvgSpeedKmph=18.26,Readings=15,Status=CONGESTED
+R02-17	AvgSpeedKmph=16.96,Readings=15,Status=CONGESTED
+R02-18	AvgSpeedKmph=19.16,Readings=15,Status=CONGESTED
+R03-08	AvgSpeedKmph=18.83,Readings=15,Status=CONGESTED
+R04-08	AvgSpeedKmph=13.08,Readings=15,Status=CONGESTED
+R04-09	AvgSpeedKmph=15.37,Readings=15,Status=CONGESTED
+R04-17	AvgSpeedKmph=14.57,Readings=15,Status=CONGESTED
+R04-18	AvgSpeedKmph=16.17,Readings=15,Status=CONGESTED
+R05-08	AvgSpeedKmph=16.86,Readings=15,Status=CONGESTED
+R05-09	AvgSpeedKmph=19.72,Readings=15,Status=CONGESTED
+R05-17	AvgSpeedKmph=18.10,Readings=15,Status=CONGESTED
+
+== Rejected (malformed) records per input file
+wifi_logs.csv: 2
+canteen.csv: 2
+library.csv: 2
+transport.csv: 1
