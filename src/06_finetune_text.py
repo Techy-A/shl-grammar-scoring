@@ -15,7 +15,7 @@ Two modes:
           (on Kaggle, 2 processes split the folds across the two T4s)
   merge : python src/06_finetune_text.py --merge          -> artifacts/pred_<name>.parquet + results.csv row
   --crops (train on the test-length crop transcripts too, validate on them) and --drop-zero (train without the
-  score-0 clips) add _crops / _nozero to the run name; pass the same flags to --merge.
+  score-0 clips) add _crops / _nozero to the run name; --seed n adds _seed<n>; pass the same flags to --merge.
 """
 import argparse
 
@@ -74,11 +74,14 @@ def main():
                     help="train without the score-0 clips (noise recordings with invented fluent transcripts)")
     ap.add_argument("--epochs", type=int, default=EPOCHS)
     ap.add_argument("--model", default=MODEL, help="another Hugging Face encoder, e.g. roberta-large")
+    ap.add_argument("--seed", type=int, default=0, help="seed > 0: another run of the same recipe (adds _seed<n>)")
     args = ap.parse_args()
     other = args.model != MODEL   # a non-default encoder gets its own run name, e.g. s4_roberta-large_ft
     MODEL, short = args.model, args.model.split("/")[-1]
     prefix = "s4" + "c" * args.crops + "z" * args.drop_zero + f"_{short}" * other
     name = (f"s4_{short}_ft" if other else NAME) + "_crops" * args.crops + "_nozero" * args.drop_zero
+    if args.seed:   # seed runs are averaged later; the fine-tune alone is noisy (one run's OOF RMSE varies by fold luck)
+        prefix, name = prefix + f"_seed{args.seed}", name + f"_seed{args.seed}"
     if args.merge:
         return merge_folds(prefix, name, MODEL)
 
@@ -114,7 +117,8 @@ def main():
     custom = args.crops or args.drop_zero
     for k in args.folds:
         finetune_fold(k, df, folds, make_model, train_batches, lambda m, idx: predict(m, enc, idx),
-                      args.epochs, BS, prefix, rows=rows if custom else None, save=save(k) if custom else None)
+                      args.epochs, BS, prefix, rows=rows if custom else None, save=save(k) if custom else None,
+                      seed=args.seed)
 
 
 if __name__ == "__main__":

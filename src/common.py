@@ -43,7 +43,7 @@ DTYPE = (torch.float32 if not torch.cuda.is_available() or "GTX 16" in torch.cud
 AMP = DTYPE == torch.float16   # mixed-precision training only where fp16 works (Kaggle T4)
 
 
-def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix, rows=None, save=None):
+def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix, rows=None, save=None, seed=0):
     """Training loop shared by 06_finetune_text.py and 07_finetune_audio.py, for fold k.
 
     make_model() -> (model, AdamW param groups); built after seeding, so each fold is reproducible.
@@ -52,9 +52,10 @@ def finetune_fold(k, df, folds, make_model, batches, predict, epochs, bs, prefix
     Targets are label / 5 (in [0, 1]), MSE loss. A fixed number of epochs, no early stopping, so the
     out-of-fold predictions stay honest. Writes artifacts/<prefix>_fold{k}.parquet (val + test rows).
     rows(k) -> (train, val, test) row indices and save(model) replace the default row choice and output.
+    seed > 0 gives another reproducible run of the same fold (different head init, dropout and batch order).
     """
-    torch.manual_seed(k)
-    rng = np.random.default_rng(k)
+    torch.manual_seed(k + 1000 * seed)
+    rng = np.random.default_rng(k + 1000 * seed)
     is_tr = (df.split == "train").values
     tr_idx, va_idx, te_idx = rows(k) if rows else (np.where(is_tr & (folds != k))[0], np.where(is_tr & (folds == k))[0],
                                                    np.where(~is_tr)[0])
