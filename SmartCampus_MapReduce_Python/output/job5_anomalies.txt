@@ -1,0 +1,4 @@
+S107	AvgVisitMin=181.83,OverallAvgMin=92.10,Ratio=1.97x,Flag=ANOMALY
+S123	AvgVisitMin=205.11,OverallAvgMin=92.10,Ratio=2.23x,Flag=ANOMALY
+S131	AvgVisitMin=218.00,OverallAvgMin=92.10,Ratio=2.37x,Flag=ANOMALY
+S148	AvgVisitMin=223.43,OverallAvgMin=92.10,Ratio=2.43x,Flag=ANOMALY

@@ -1,0 +1,8 @@
+AP01	TotalDataMB=32703.20,TotalDurationMin=10909.00,Sessions=175,AvgSessionMin=62.34
+AP02	TotalDataMB=15300.80,TotalDurationMin=4996.00,Sessions=78,AvgSessionMin=64.05
+AP03	TotalDataMB=34825.60,TotalDurationMin=11291.00,Sessions=181,AvgSessionMin=62.38
+AP04	TotalDataMB=12753.00,TotalDurationMin=4100.00,Sessions=64,AvgSessionMin=64.06
+AP05	TotalDataMB=14845.80,TotalDurationMin=4966.00,Sessions=85,AvgSessionMin=58.42
+AP06	TotalDataMB=8939.40,TotalDurationMin=2547.00,Sessions=39,AvgSessionMin=65.31
+AP07	TotalDataMB=6735.10,TotalDurationMin=2028.00,Sessions=34,AvgSessionMin=59.65
+AP08	TotalDataMB=8359.90,TotalDurationMin=2631.00,Sessions=44,AvgSessionMin=59.80

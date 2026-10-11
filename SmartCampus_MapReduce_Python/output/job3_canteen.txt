@@ -1,0 +1,10 @@
+Burger	TotalQuantity=92,TotalRevenue=11040.00
+Coffee	TotalQuantity=112,TotalRevenue=4480.00
+Juice	TotalQuantity=120,TotalRevenue=6000.00
+Muffin	TotalQuantity=83,TotalRevenue=3735.00
+Noodles	TotalQuantity=58,TotalRevenue=6380.00
+Pasta	TotalQuantity=68,TotalRevenue=9520.00
+Samosa	TotalQuantity=64,TotalRevenue=960.00
+Sandwich	TotalQuantity=97,TotalRevenue=7760.00
+Tea	TotalQuantity=74,TotalRevenue=1480.00
+Water	TotalQuantity=67,TotalRevenue=1340.00

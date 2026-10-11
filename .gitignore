@@ -15,3 +15,5 @@
 !/aryan_awasthi.csv
 !/notebook/
 !/report/
+!/SmartCampus_MapReduce_Python/
+/SmartCampus_MapReduce_Python/**/__pycache__/
