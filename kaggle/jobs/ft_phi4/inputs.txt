@@ -1,0 +1,3 @@
+folds.csv
+transcripts_phi4.parquet
+transcripts_phi4_crops.parquet
