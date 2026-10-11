@@ -1,4 +1,4 @@
-# SmartCampusAnalytics — Python Hadoop Streaming
+# SmartCampusAnalytics: Python Hadoop Streaming
 
 Six MapReduce jobs (ten stages) over campus Wi-Fi, canteen, library and transport logs.
 The full write-up, with results, worksheet answers and viva answers, is in [REPORT.md](REPORT.md) (also `.docx` / `.pdf`).

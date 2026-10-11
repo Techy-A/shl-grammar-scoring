@@ -15,7 +15,7 @@ Each reducer reads those lines after they are sorted by key and prints one resul
 
 **Dataset.** The worksheet gives each file's schema and one example row, but no data. I wrote
 `scripts/generate_data.py` to create a reproducible (seeded) dataset for one campus week,
-10–14 Aug 2026. It contains 700 Wi-Fi sessions, 300 canteen transactions (594 item lines),
+10-14 Aug 2026. It contains 700 Wi-Fi sessions, 300 canteen transactions (594 item lines),
 160 library visits (with matching EXIT rows) and 1,050 bus speed readings. A few deliberately
 malformed lines are added to every file to test how the jobs reject bad records.
 
@@ -86,7 +86,7 @@ go to the same reducer (see Q13).
 All results below come from `./run_local.sh`. `scripts/verify.py` recomputes every job
 directly from the CSVs without MapReduce. **All six jobs match (PASS).**
 
-## Job 1 — Peak Wi-Fi Usage (64 hourly keys)
+## Job 1: Peak Wi-Fi Usage (64 hourly keys)
 
 | Rank | Hour | TotalDataMB | TotalDurationMin | Sessions |
 |---|---|---|---|---|
@@ -98,7 +98,7 @@ directly from the CSVs without MapReduce. **All six jobs match (PASS).**
 hour is Wednesday 12 Aug at 11:00. This is the slot to protect when planning bandwidth upgrades,
 and to avoid for scheduling large software updates.
 
-## Job 2 — Access Point Utilisation
+## Job 2: Access Point Utilisation
 
 | AP | TotalDataMB | TotalDurationMin | Sessions | AvgSessionMin |
 |---|---|---|---|---|
@@ -112,11 +112,11 @@ and to avoid for scheduling large software updates.
 | AP08 | 8,359.90 | 2,631 | 44 | 59.80 |
 
 *Interpretation:* AP03 and AP01 together carry about 50% of all traffic. The average session
-length is similar everywhere (58–65 min), so the difference in load comes from the **number of
+length is similar everywhere (58-65 min), so the difference in load comes from the **number of
 users**, not from longer sessions. Adding a second access point near AP03 (and AP01) is the
 change that would help most.
 
-## Job 3 — Canteen Item Frequency
+## Job 3: Canteen Item Frequency
 
 | Item | Qty | Revenue (₹) | | Item | Qty | Revenue (₹) |
 |---|---|---|---|---|---|---|
@@ -129,7 +129,7 @@ change that would help most.
 *Interpretation:* Juice and Coffee sell the most units, but Burger and Pasta bring in the most
 revenue. Ranking items by quantity alone would understate the importance of the high-value items.
 
-## Job 4 — Top Co-Purchased Pairs (45 distinct pairs from 392 pair records)
+## Job 4: Top Co-Purchased Pairs (45 distinct pairs from 392 pair records)
 
 | Rank | Pair | Transactions |
 |---|---|---|
@@ -143,7 +143,7 @@ revenue. Ranking items by quantity alone would understate the importance of the 
 Sandwich" are natural candidates for combo offers, and placing these items next to each other
 would make them quicker to buy at the counter.
 
-## Job 5 — Library Usage Anomaly
+## Job 5: Library Usage Anomaly
 
 Overall average visit = 14,736 min ÷ 160 visits = **92.10 min**, so the threshold is
 1.5 × 92.10 = **138.15 min**.
@@ -159,7 +159,7 @@ Overall average visit = 14,736 min ÷ 160 visits = **92.10 min**, so the thresho
 are the heaviest users of reading-room seats, and they may be useful contacts for a survey on
 extended library hours or bookable study spaces.
 
-## Job 6 — Transport Congestion (70 route-hours, 14 congested)
+## Job 6: Transport Congestion (70 route-hours, 14 congested)
 
 | Route | Congested hours (avg km/h) |
 |----|--------------------|
@@ -170,8 +170,8 @@ extended library hours or bookable study spaces.
 | R05 | 08 (16.86), 09 (19.72), 17 (18.10) |
 
 *Interpretation:* every route is congested at 08:00, which is the morning rush. R04 is the
-slowest route overall and is congested in both rush hours. Adding R04 buses at 08:00–10:00 and
-17:00–19:00, or staggering class start times, would ease the problem.
+slowest route overall and is congested in both rush hours. Adding R04 buses at 08:00-10:00 and
+17:00-19:00, or staggering class start times, would ease the problem.
 
 ## Malformed Records Rejected
 
@@ -186,12 +186,12 @@ slowest route overall and is congested in both rush hours. Adding R04 buses at 0
 
 | Job | Expected Key | Expected Value | Student Result |
 |------|------|--------|------------|
-| Job 1 – Peak Wi-Fi | `YYYY-MM-DD-HH` | TotalDataMB, TotalDurationMin, Sessions | Peak = **2026-08-12-11**: 7,872.10 MB, 1,744 min, 27 sessions |
-| Job 2 – Access Point | `AccessPoint` | TotalDataMB, TotalDurationMin, Sessions, AvgSessionMin | Busiest = **AP03**: 34,825.60 MB, 11,291 min, 181 sessions, 62.38 min avg |
-| Job 3 – Canteen | `Item` | TotalQuantity, TotalRevenue | Top revenue **Burger** ₹11,040 (92 units); top quantity **Juice** (120) |
-| Job 4 – Co-Purchase | ItemA\|ItemB (sorted) | Number of transactions | Top pair **Burger + Juice** = 42 transactions |
-| Job 5 – Library | `StudentID` | AvgVisitMin, Ratio, ANOMALY flag | Overall avg 92.10 min; **S107, S123, S131, S148** flagged |
-| Job 6 – Transport | `RouteID-HH` | AvgSpeedKmph, Status | 14 / 70 route-hours congested; worst **R04-08** = 13.08 km/h |
+| Job 1: Peak Wi-Fi | `YYYY-MM-DD-HH` | TotalDataMB, TotalDurationMin, Sessions | Peak = **2026-08-12-11**: 7,872.10 MB, 1,744 min, 27 sessions |
+| Job 2: Access Point | `AccessPoint` | TotalDataMB, TotalDurationMin, Sessions, AvgSessionMin | Busiest = **AP03**: 34,825.60 MB, 11,291 min, 181 sessions, 62.38 min avg |
+| Job 3: Canteen | `Item` | TotalQuantity, TotalRevenue | Top revenue **Burger** ₹11,040 (92 units); top quantity **Juice** (120) |
+| Job 4: Co-Purchase | ItemA\|ItemB (sorted) | Number of transactions | Top pair **Burger + Juice** = 42 transactions |
+| Job 5: Library | `StudentID` | AvgVisitMin, Ratio, ANOMALY flag | Overall avg 92.10 min; **S107, S123, S131, S148** flagged |
+| Job 6: Transport | `RouteID-HH` | AvgSpeedKmph, Status | 14 / 70 route-hours congested; worst **R04-08** = 13.08 km/h |
 
 # 6. Student Implementation Worksheet
 
@@ -319,7 +319,7 @@ history and flags sudden drops in campus presence, so student-support services c
 early. A simpler alternative is **classroom occupancy estimation**: count distinct students per
 access point per lecture slot, and compare with room capacity to find over-booked or empty rooms.
 
-# 7. Viva Questions — Prepared Answers
+# 7. Viva Questions: Prepared Answers
 
 | Question | Answer |
 |----------|------------------------------|
@@ -343,7 +343,7 @@ access point per lecture slot, and compare with room capacity to find over-booke
 
 | Challenge | Status / evidence |
 |----------|------------------------------|
-| Combiner for the Wi-Fi job | `src/job1_wifi_combiner.py`, used for Jobs 1–3, 4-s2, 5, 6. |
+| Combiner for the Wi-Fi job | `src/job1_wifi_combiner.py`, used for Jobs 1-3, 4-s2, 5, 6. |
 | Top three hours instead of all | `scripts/top_n.py` → `output/job1_top3_hours.txt` (section 4). |
 | Custom partitioner for transport | `KeyFieldBasedPartitioner` on RouteID in `run_hadoop.sh` (Q13). |
 | Malformed records + rejected count | 2 / 2 / 2 / 1 rejected, Hadoop counters, `output/rejected_records.txt`. |
