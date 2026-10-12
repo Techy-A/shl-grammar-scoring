@@ -206,3 +206,14 @@ files predicted at 0.3132 (28: 0.3150). Not submitted, since it would not pass t
 (score - 0.4 (1 - r)) / 0.6 rather than proportional to the score). Weights: 31 0.330, 26 0.230, 13 0.198,
 probe_stretch_short_x1.2 0.109, probe_biasfix_full_minus0.1 0.090, 29 0.042; predicted 0.3132. The weights are fitted to
 public scores, so this step is tuned to the public 60% of the test clips.
+
+**Attention pooling on Voxtral frames** (`33_attn_pool.csv`, 0.3178). 26 with one more model in each blend: a small
+attention-pooling head (`20_attn_pool.py`) on Voxtral frame states cached once per clip (`19_voxtral_frames.py`,
+PCA to 256 dimensions), trained on a new random test-length prefix of every clip in every epoch. A prefix of the
+frames matches the true crop embedding closely (median per-clip correlation 0.997). Alone: RMSE 0.576 on the 732
+scored clips (Voxtral ridge 0.584); correlation 0.078 with the blend's residuals; out-of-fold metric of the main model
+0.3390 to 0.3340 (bootstrap P = 0.96), the largest gain since the fine-tuned text model.
+
+**Weighted average of six submissions** (`34_lb_weighted_mix4.csv`, **0.3116, new best, 2nd**). Same method as 32,
+with 33 among the inputs: 33 0.494, 13 0.215, probe_biasfix_full_minus0.1 0.120, 31 0.089, probe_stretch_short_x1.2
+0.081, cand_qwen3 0.001; predicted 0.3110. Weights fitted to public scores (tuned to the public 60% of the test clips).
