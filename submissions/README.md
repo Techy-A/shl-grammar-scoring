@@ -195,3 +195,8 @@ Voxtral-Small-24B in 4-bit (ridge RMSE 0.615 against Voxtral-Mini's 0.601); Phi-
 with the Whisper version, blend 0.3379 against 0.3371); Qwen2.5-7B with LoRA as a regressor (`--lora`, two pilot folds no
 better than DeBERTa, correlation 0.03 with the blend's residuals); batch weights shrunk toward the global weights (worse
 than fully separate weights at every strength).
+
+**Nine-seed fine-tune plus Phi-4 audio states** (`31_ft_seed9_phi4.csv`, 0.3203, worse). 30 with a ridge on
+Phi-4-multimodal states added to each blend; out-of-fold metric 0.3371 (same as 30). Its predictions differ from 28 by
+0.114 RMS, so it was submitted to test whether it helps the public-score weighting: weight 0.33, best mix of all scored
+files predicted at 0.3132 (28: 0.3150). Not submitted, since it would not pass the next scores on the leaderboard (0.3126).
