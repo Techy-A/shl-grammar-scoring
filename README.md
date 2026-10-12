@@ -106,6 +106,11 @@ jupyter notebook notebook/shl_grammar_scoring.ipynb
 
 Locally the notebook reuses the cached `artifacts/`. To run the heavy steps on Kaggle from your machine, `bash kaggle/run_job.sh <job>` uploads `src/`, runs the job as a kernel, waits and downloads the outputs.
 
+**Checked on Kaggle.** A run of the notebook on Kaggle (CPU, from the saved GPU features) reproduces the submitted file with
+correlation 0.9999 (RMS difference 0.014). The small difference comes from the attention-pooling head, a neural network
+whose training does not follow exactly the same numerical path on a CPU as on a GPU; its out-of-fold RMSE was 0.571 there
+against 0.576 locally, and the ensemble's 0.506 against 0.500.
+
 > Note: GTX 16xx cards produce NaNs in fp16, so `common.py` switches them to fp32.
 
 ---
