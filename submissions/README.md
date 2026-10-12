@@ -217,3 +217,9 @@ scored clips (Voxtral ridge 0.584); correlation 0.078 with the blend's residuals
 **Weighted average of six submissions** (`34_lb_weighted_mix4.csv`, **0.3116, new best, 2nd**). Same method as 32,
 with 33 among the inputs: 33 0.494, 13 0.215, probe_biasfix_full_minus0.1 0.120, 31 0.089, probe_stretch_short_x1.2
 0.081, cand_qwen3 0.001; predicted 0.3110. Weights fitted to public scores (tuned to the public 60% of the test clips).
+
+**After 34, no submission** (12 Oct). Attention-pooling heads on Phi-4-multimodal and WavLM-large frames
+(`19_voxtral_frames.py --source`, `20_attn_pool.py --source`): weaker alone (RMSE 0.626 and 0.645 on the scored clips)
+and worse next to the Voxtral head (out-of-fold metric 0.3340 to 0.3352-0.3365). Task-adaptive pretraining of DeBERTa
+on all transcripts before the fine-tune (`18_tapt.py`, MLM loss 6.1 to 2.7): RMSE 0.594, correlation 0.96 with the
+current fine-tune; replacing it 0.3340 to 0.3345, adding it 0.3351.
