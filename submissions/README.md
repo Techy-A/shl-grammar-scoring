@@ -200,3 +200,9 @@ than fully separate weights at every strength).
 Phi-4-multimodal states added to each blend; out-of-fold metric 0.3371 (same as 30). Its predictions differ from 28 by
 0.114 RMS, so it was submitted to test whether it helps the public-score weighting: weight 0.33, best mix of all scored
 files predicted at 0.3132 (28: 0.3150). Not submitted, since it would not pass the next scores on the leaderboard (0.3126).
+
+**Weighted average of six submissions** (`32_lb_weighted_mix3.csv`, **0.3134, new best**). Same method as 28, now with
+31 among the inputs and the shift probes converted exactly (a shift does not change Pearson, so their RMSE is
+(score - 0.4 (1 - r)) / 0.6 rather than proportional to the score). Weights: 31 0.330, 26 0.230, 13 0.198,
+probe_stretch_short_x1.2 0.109, probe_biasfix_full_minus0.1 0.090, 29 0.042; predicted 0.3132. The weights are fitted to
+public scores, so this step is tuned to the public 60% of the test clips.
