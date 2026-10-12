@@ -63,9 +63,12 @@ def main():
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--source", default="voxtral")
+    ap.add_argument("--seeds", type=int, default=len(SEEDS), help="more seeds -> name gets _s<n> (and _e<epochs> if changed)")
     args = ap.parse_args()
     z = np.load(ART / f"{args.source}_frames.npz", allow_pickle=True)
     name = "vp_attn" + ("" if args.source == "voxtral" else f"_{args.source}")
+    seeds = list(range(args.seeds))
+    name += (f"_s{args.seeds}" if args.seeds != len(SEEDS) else "") + (f"_e{args.epochs}" if args.epochs != 40 else "")
     F = z["frames"].astype(np.float32)
     ids = pd.DataFrame({"filename": z["filename"], "split": z["split"], "start": z["start"], "lens": z["lens"]})
     train = pd.read_csv(DATA / "train.csv").merge(ids[ids.split == "train"], on="filename")   # train.csv order
@@ -85,7 +88,7 @@ def main():
     folds = fold_of(train.filename, "gfold_s0")
     test_durs = pd.read_parquet(ART / "feat_text_prompt.parquet").query("split == 'test'").duration.values
     oof, te = np.zeros(len(train)), np.zeros(len(test))
-    for seed in SEEDS:
+    for seed in seeds:
         for k in range(5):
             torch.manual_seed(seed * 10 + k)
             rng = np.random.default_rng(seed * 10 + k)
@@ -108,8 +111,8 @@ def main():
                     sched.step()
             va = np.where(folds == k)[0]
             p = np.mean([predict(model, F, train.start.values[va], c[va]) for c in crops], axis=0)
-            oof[va] += p / len(SEEDS)
-            te += predict(model, F, test.start.values, test.lens.values) / (len(SEEDS) * 5)
+            oof[va] += p / len(seeds)
+            te += predict(model, F, test.start.values, test.lens.values) / (len(seeds) * 5)
             sc = y[va] > 0
             print(f"seed {seed} fold {k}: val RMSE (scored) {np.sqrt(np.mean((p[sc] - y[va][sc]) ** 2)):.4f}", flush=True)
 
