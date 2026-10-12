@@ -18,7 +18,7 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer, DataCollatorForLan
 
 from common import AMP, ART
 
-MODEL, BS, MAX_LEN, LR = "microsoft/deberta-v3-large", 8, 256, 3e-5
+MODEL, BS, MAX_LEN, LR = "microsoft/deberta-v3-large", 4, 256, 2e-5   # batch 4: the 128k-word output layer fills a T4 at 8
 
 
 def main():
@@ -33,6 +33,7 @@ def main():
     rows = [{"input_ids": i, "attention_mask": m} for i, m in zip(enc.input_ids, enc.attention_mask)]
     collate = DataCollatorForLanguageModeling(tok, mlm_probability=0.15)
     model = AutoModelForMaskedLM.from_pretrained(MODEL, dtype=torch.float32).to("cuda")   # fp32 master weights (fp16 NaNs)
+    model.gradient_checkpointing_enable()
     opt = torch.optim.AdamW(model.parameters(), lr=LR, weight_decay=0.01)
     steps = args.epochs * int(np.ceil(len(rows) / BS))
     sched = get_linear_schedule_with_warmup(opt, int(0.06 * steps), steps)

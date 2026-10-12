@@ -56,11 +56,12 @@ def main():
         parts = [np.load(f, allow_pickle=True) for f in sorted(raw.glob("frames_shard*.npz"))]
         ids = pd.concat([pd.DataFrame({c: p[c] for c in ("filename", "split", "label")}) for p in parts], ignore_index=True)
         lens = np.concatenate([p["lens"] for p in parts])
-        X = torch.from_numpy(np.concatenate([p["frames"] for p in parts])).cuda().float()
-        sample = X[torch.randperm(len(X), generator=torch.Generator().manual_seed(0))[:100_000].cuda()]
+        X = np.concatenate([p["frames"] for p in parts])   # fp16 on the CPU: ~4 GB, twice that in fp32 doesn't fit a T4
+        sample = torch.from_numpy(X[np.random.default_rng(0).permutation(len(X))[:100_000]]).cuda().float()
         mu = sample.mean(0)
         _, _, V = torch.pca_lowrank(sample - mu, q=DIM, center=False)
-        Z = ((X - mu) @ V).half().cpu().numpy()
+        Z = np.concatenate([((torch.from_numpy(X[i:i + 50_000]).cuda().float() - mu) @ V).half().cpu().numpy()
+                            for i in range(0, len(X), 50_000)])
         np.savez(ART / "voxtral_frames.npz", frames=Z, start=np.r_[0, np.cumsum(lens)[:-1]], lens=lens,
                  filename=ids.filename.values, split=ids.split.values, label=ids.label.values,
                  mu=mu.cpu().numpy(), basis=V.cpu().numpy())
