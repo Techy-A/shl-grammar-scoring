@@ -183,3 +183,15 @@ its own (13) had made the score worse. Tuned on the public clips like 27.
 same way (Kaggle 2x T4, `06_finetune_text.py --model roberta-large --crops --drop-zero`): RMSE 0.602 on the 732 scored
 clips, correlation 0.93 with the DeBERTa fine-tune. In place of it in each blend: out-of-fold metric 0.3390 to 0.3368
 (bootstrap P = 0.80), but public 0.3225 against 0.3175, and it adds nothing to the public-score weighting (weight 0.06).
+
+**Nine seeds of the DeBERTa fine-tune** (`30_ft_seed9.csv`, 0.3196, worse). The fine-tune of 26 averaged over 9 seeds
+(`06_finetune_text.py --seed`): RMSE 0.572 on the 732 scored clips against 0.592 for one run; out-of-fold metric of the
+main model 0.3390 to 0.3371 (bootstrap P = 0.88), but public 0.3196 against 26's 0.3175, so 26's single run was lucky on
+the public clips. It gets weight 0 in the public-score weighting (best mix of all scored files predicted at 0.3139).
+
+**Later experiments, no submission** (12 Oct). None improved the out-of-fold metric beyond the nine-seed fine-tune:
+Voxtral-Small-24B in 4-bit (ridge RMSE 0.615 against Voxtral-Mini's 0.601); Phi-4-multimodal audio-LLM states
+(`17_phi4mm_embed.py`, ridge 0.668, no blend gain); Phi-4 transcripts for the fine-tune (`--tag phi4`: correlation 0.95
+with the Whisper version, blend 0.3379 against 0.3371); Qwen2.5-7B with LoRA as a regressor (`--lora`, two pilot folds no
+better than DeBERTa, correlation 0.03 with the blend's residuals); batch weights shrunk toward the global weights (worse
+than fully separate weights at every strength).
