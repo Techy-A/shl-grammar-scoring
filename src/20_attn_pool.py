@@ -10,8 +10,9 @@ Training: without the score-0 clips (the 08_blend.py gate handles them), MSE, Ad
 3 seeds. Validation as 03_train.py --crops: the 4 standard crops of each validation clip (prefixes of its frames),
 averaged per clip; test: the full clips, averaged over folds and seeds.
 --check compares the prefix approximation with the true crop embeddings of 11_voxtral_embed.py (feat_voxtral_crops).
+--source phi4 / wavlm-large trains on that encoder's frame cache (19_voxtral_frames.py --source) -> pred_vp_attn_<source>.
 Output: artifacts/pred_vp_attn.parquet (+ a results.csv row)
-Usage : python src/20_attn_pool.py [--check] [--epochs 40]
+Usage : python src/20_attn_pool.py [--check] [--epochs 40] [--source voxtral]
 """
 import argparse
 
@@ -61,8 +62,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--check", action="store_true")
+    ap.add_argument("--source", default="voxtral")
     args = ap.parse_args()
-    z = np.load(ART / "voxtral_frames.npz", allow_pickle=True)
+    z = np.load(ART / f"{args.source}_frames.npz", allow_pickle=True)
+    name = "vp_attn" + ("" if args.source == "voxtral" else f"_{args.source}")
     F = z["frames"].astype(np.float32)
     ids = pd.DataFrame({"filename": z["filename"], "split": z["split"], "start": z["start"], "lens": z["lens"]})
     train = pd.read_csv(DATA / "train.csv").merge(ids[ids.split == "train"], on="filename")   # train.csv order
@@ -113,12 +116,12 @@ def main():
     oof, te = np.clip(oof, 0, 5), np.clip(te, 0, 5)
     m = y > 0
     rmse, r = float(np.sqrt(np.mean((oof - y) ** 2))), float(np.corrcoef(oof, y)[0, 1])
-    print(f"vp_attn: CV RMSE {rmse:.4f} | Pearson {r:.4f} | scored clips: RMSE {np.sqrt(np.mean((oof[m] - y[m]) ** 2)):.4f} "
+    print(f"{name}: CV RMSE {rmse:.4f} | Pearson {r:.4f} | scored clips: RMSE {np.sqrt(np.mean((oof[m] - y[m]) ** 2)):.4f} "
           f"r {np.corrcoef(oof[m], y[m])[0, 1]:.4f}")
     pd.concat([pd.DataFrame({"filename": train.filename, "split": "train", "label": y, "pred": oof}),
                pd.DataFrame({"filename": test.filename, "split": "test", "label": np.nan, "pred": te})]
-              ).to_parquet(ART / "pred_vp_attn.parquet", index=False)
-    pd.DataFrame([dict(name="vp_attn", model="attn-pool", feats="voxtral_frames", n_feats=256, cv_rmse=round(rmse, 4),
+              ).to_parquet(ART / f"pred_{name}.parquet", index=False)
+    pd.DataFrame([dict(name=name, model="attn-pool", feats=f"{args.source}_frames", n_feats=256, cv_rmse=round(rmse, 4),
                        cv_pearson=round(r, 4))]).to_csv(ART / "results.csv", mode="a", header=False, index=False)
 
 
