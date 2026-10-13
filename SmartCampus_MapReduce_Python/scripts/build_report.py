@@ -7,6 +7,7 @@ Needs pandoc, python-docx and LibreOffice (soffice).
 """
 import os
 import subprocess
+import sys
 
 from docx import Document
 from docx.enum.section import WD_SECTION
@@ -105,7 +106,35 @@ def add_page_number(section):
     run.font.name, run.font.size, run.font.color.rgb = FONT, Pt(11), BLACK
 
 
+def fill_trace():
+    """Replace the appendix between the TRACE markers with a fresh run of run_demo.py,
+    followed by the verification and combiner checks, so the appendix always matches the code."""
+    start, end = "<!-- TRACE START -->", "<!-- TRACE END -->"
+    with open(MD) as f:
+        text = f.read()
+    if start not in text:
+        return
+    py = sys.executable
+    trace = subprocess.run([py, os.path.join(ROOT, "run_demo.py"), "--markdown"],
+                           capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    verify = subprocess.run([py, os.path.join(ROOT, "scripts", "verify.py")],
+                            capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    comb = subprocess.run(["bash", os.path.join(ROOT, "scripts", "compare_combiner.sh")],
+                          capture_output=True, text=True, check=True, cwd=ROOT).stdout
+    extra = ("\n## Verification\n\n`scripts/verify.py` recomputes every answer with plain Python "
+             "(no MapReduce) and compares it with the files in output/:\n\n```text\n"
+             "$ python scripts/verify.py\n" + verify + "```\n\n"
+             "## Combiner and Multiple Reducers\n\n`scripts/compare_combiner.sh` splits the Wi-Fi "
+             "log into 4 map tasks, counts the records shuffled with and without the combiner, and "
+             "runs Job 1 with 3 reducers:\n\n```text\n$ scripts/compare_combiner.sh\n" + comb + "```\n")
+    head, rest = text.split(start, 1)
+    tail = rest.split(end, 1)[1]
+    with open(MD, "w") as f:
+        f.write(head + start + "\n" + trace + extra + end + tail)
+
+
 def main():
+    fill_trace()
     subprocess.run(["pandoc", MD, "-o", DOCX], check=True)
     doc = Document(DOCX)
 
@@ -119,8 +148,13 @@ def main():
     set_style(doc, "Heading 1", 15, bold=True, italic=False, before=18, after=8)
     set_style(doc, "Heading 2", 13, bold=True, italic=False, before=14, after=6)
     set_style(doc, "Heading 3", 12, bold=True, italic=False, before=10, after=4)
-    for name in ("Verbatim Char", "Source Code", "Hyperlink"):
+    for name in ("Verbatim Char", "Hyperlink"):
         set_style(doc, name, 12)
+    set_style(doc, "Source Code", 10, before=2, after=8)
+    try:
+        doc.styles["Source Code"].paragraph_format.left_indent = Inches(0.25)
+    except KeyError:
+        pass
     force_font_and_colour(doc.styles.element)
     force_font_and_colour(doc.element.body)
 
