@@ -1,0 +1,10 @@
+Hadoop is an open source framework for storing and processing big data.
+Hadoop stores data in HDFS and processes data with MapReduce.
+MapReduce splits a job into map tasks and reduce tasks.
+The map task reads input data and emits key value pairs.
+The framework sorts the pairs by key and sends every key to one reducer.
+The reduce task adds the values of each key and writes the final output.
+Word count is the classic first MapReduce program.
+In word count the map task emits each word with the value 1,
+and the reduce task adds the ones to count how often each word appears.
+Big data needs many machines, and MapReduce moves the program to the data.

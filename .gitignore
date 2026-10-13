@@ -17,3 +17,5 @@
 !/report/
 !/SmartCampus_MapReduce_Python/
 /SmartCampus_MapReduce_Python/**/__pycache__/
+!/Lab_Experiments/
+/Lab_Experiments/**/__pycache__/

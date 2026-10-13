@@ -1,0 +1,3 @@
+A search engine ranks documents for a query. TF IDF gives a high weight to a word that is
+frequent in one document but rare in other documents. The engine returns the documents
+with the highest weight for the query.
