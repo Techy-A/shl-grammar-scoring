@@ -1,0 +1,3 @@
+Python is a simple programming language. Python programs can run on Hadoop through Hadoop
+Streaming. Streaming passes the data to the Python program as lines of text, and the
+program prints its output as lines of text.
