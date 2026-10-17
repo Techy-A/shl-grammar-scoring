@@ -14,6 +14,13 @@ the audio tokens -> 2 x 3072 features. --upper pools the upper layers (60-90%) i
 (the judgement is the same either way, so it isn't saved again). Voxtral pads audio to 30 s chunks of 375 tokens (12.5 per second),
 so tokens that only cover padding are dropped before pooling (as the Whisper padding in 05_audio_embed.py).
 
+--last saves, instead of the audio-token pooling, the states that come after the audio and so attend to both the audio
+and the rubric: the last token before the answer (lower-middle and upper layers) and the mean over the rubric's tokens,
+3 x 3072 features -> feat_voxtral_last (Voxtral's own judgement of the clip, closer to the task than the audio states).
+
+--small uses Voxtral-Small-24B instead (same audio encoder, a 24B language model): it is loaded in 4-bit (nf4) and
+split over both T4s, so one process does all rows -> feat_voxtral_small[_judge].
+
 --crops embeds the same test-length crops of the train clips as 05_audio_embed.py --crops, so
 03_train.py --crops can train and validate at test-like lengths. --shard k n embeds every n-th row from
 row k (two T4s, one model each); the Kaggle job merges the shards.
@@ -32,11 +39,12 @@ import pandas as pd
 import soundfile as sf
 import torch
 from tqdm import tqdm
-from transformers import AutoProcessor, VoxtralForConditionalGeneration
+from transformers import AutoProcessor, BitsAndBytesConfig, VoxtralForConditionalGeneration
 
 from common import ART, DATA, DTYPE, N_CROPS, SR, crop_lengths
 
 MODEL = "mistralai/Voxtral-Mini-3B-2507"
+SMALL = "mistralai/Voxtral-Small-24B-2507"
 PROMPT = """You heard a 45-60 second spoken answer from an English test. Score the speaker's GRAMMAR: sentence
 structure, syntax, and grammatical accuracy and complexity. Fillers and self-corrections are normal in speech.
 
@@ -51,16 +59,23 @@ CHUNK_TOKENS, TOKENS_PER_SEC = 375, 12.5   # Voxtral: one 30 s chunk = 375 audio
 
 
 @torch.inference_mode()
-def embed_clip(wav, proc, model, layers, digits, tmp):
+def embed_clip(wav, proc, model, layers, digits, tmp, last_layers=None):
     sf.write(tmp, wav, SR)   # the chat template takes audio by path
     conv = [{"role": "user", "content": [{"type": "audio", "path": str(tmp)}, {"type": "text", "text": PROMPT}]}]
     x = proc.apply_chat_template(conv).to("cuda", dtype=DTYPE)
     out = model(**x, output_hidden_states=True)
     probs = torch.softmax(out.logits[0, -1, digits].float(), 0).cpu().numpy()   # the answer digit
-    hs = out.hidden_states
-    h = torch.stack([hs[l][0] for l in layers]).float().mean(0)   # (tokens, hidden), averaged over layers
+    hs = [h[0].to(out.logits.device) for h in out.hidden_states]   # --small: layers live on both GPUs
+    if last_layers is not None:
+        # --last: the states AFTER the audio, which attend to the audio and the rubric: the last token (just before the
+        # answer) averaged over the lower-middle and over the upper layers, and the mean over the rubric's tokens.
+        mid = torch.stack([hs[l] for l in layers]).float().mean(0)
+        up = torch.stack([hs[l] for l in last_layers]).float().mean(0)
+        after = (x["input_ids"][0] == model.config.audio_token_id).nonzero()[-1].item() + 1
+        return torch.cat([mid[-1], up[-1], mid[after:].mean(0)]).cpu().numpy(), probs
+    h = torch.stack([hs[l] for l in layers]).float().mean(0)   # (tokens, hidden), averaged over layers
     # Audio tokens that cover real audio: in chunk c, the first ceil(seconds of audio in c * 12.5).
-    pos = (x["input_ids"][0] == model.config.audio_token_id).nonzero().squeeze(-1)
+    pos = (x["input_ids"][0] == model.config.audio_token_id).nonzero().squeeze(-1).to(h.device)
     dur = len(wav) / SR
     keep = [p for i, p in enumerate(pos.tolist())
             if i % CHUNK_TOKENS < math.ceil(min(max(dur - 30 * (i // CHUNK_TOKENS), 0), 30) * TOKENS_PER_SEC)]
@@ -74,6 +89,9 @@ def main():
     ap.add_argument("--shard", type=int, nargs=2, default=[0, 1], metavar=("K", "N"), help="rows K, K+N, K+2N, ...")
     ap.add_argument("--limit", type=int, default=0, help="first N rows only (smoke test)")
     ap.add_argument("--upper", action="store_true", help="pool layers 60-90%% of depth -> feat_voxtral_hi")
+    ap.add_argument("--last", action="store_true",
+                    help="states after the audio and the rubric (last token, rubric mean) -> feat_voxtral_last")
+    ap.add_argument("--small", action="store_true", help="Voxtral-Small-24B in 4-bit over both GPUs -> feat_voxtral_small")
     args = ap.parse_args()
 
     # Same row list as 05_audio_embed.py, so crops line up with the other audio tables.
@@ -89,8 +107,15 @@ def main():
     if args.limit:
         files = files.head(args.limit)
 
-    proc = AutoProcessor.from_pretrained(MODEL)
-    model = VoxtralForConditionalGeneration.from_pretrained(MODEL, dtype=DTYPE).to("cuda").eval()
+    if args.small:
+        # 48 GB in fp16 -> about 14 GB in nf4; the audio encoder and projector stay fp16 (small, and closest to the input).
+        q = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=DTYPE,
+                               llm_int8_skip_modules=["audio_tower", "multi_modal_projector", "lm_head"])
+        model = VoxtralForConditionalGeneration.from_pretrained(SMALL, dtype=DTYPE, quantization_config=q,
+                                                                device_map="auto").eval()
+    else:
+        model = VoxtralForConditionalGeneration.from_pretrained(MODEL, dtype=DTYPE).to("cuda").eval()
+    proc = AutoProcessor.from_pretrained(SMALL if args.small else MODEL)
     L = model.config.text_config.num_hidden_layers
     lo, hi = (0.6, 0.9) if args.upper else (0.2, 0.6)
     layers = range(int(lo * L), int(hi * L) + 1)   # hidden_states[0] is the embedding layer
@@ -99,19 +124,21 @@ def main():
 
     folder = lambda split: "test" if split == "test" else "train"   # crops are cut from train clips
     tmp = Path(tempfile.gettempdir()) / f"voxtral_{k}.wav"
+    last_layers = range(int(0.6 * L), int(0.9 * L) + 1) if args.last else None
     emb, probs = map(np.stack, zip(*[embed_clip(sf.read(DATA / folder(r.split) / r.filename, dtype="float32")[0][:r.n],
-                                                proc, model, layers, digits, tmp)
+                                                proc, model, layers, digits, tmp, last_layers)
                                      for r in tqdm(files.itertuples(), total=len(files), mininterval=60)]))
     # ponytail: an fp16 overflow fails the whole run; add a per-clip fp32 retry if it ever happens
     assert np.isfinite(emb).all() and np.isfinite(probs).all(), "non-finite outputs (fp16 overflow?)"
     ids = files[["filename", "split", "label"]]
     sfx = ("_crops" if args.crops else "") + (f"_shard{k}" if n > 1 else "")
+    name = "feat_voxtral" + "_small" * args.small + ("_hi" if args.upper else "_last" if args.last else "")
     pd.concat([ids, pd.DataFrame(emb, columns=[f"a{i}" for i in range(emb.shape[1])])], axis=1).to_parquet(
-        ART / f"feat_voxtral{'_hi' if args.upper else ''}{sfx}.parquet", index=False)
-    if not args.upper:
+        ART / f"{name}{sfx}.parquet", index=False)
+    if not (args.upper or args.last):
         ids.assign(v_mean=probs @ np.arange(1, 6), **{f"v_p{d}": probs[:, d - 1] for d in range(1, 6)}).to_parquet(
-            ART / f"feat_voxtral_judge{sfx}.parquet", index=False)
-    print(f"saved feat_voxtral{'_hi' if args.upper else ''}{sfx} {emb.shape}, layers {layers.start}-{layers.stop - 1} of {L}, "
+            ART / f"feat_voxtral{'_small' * args.small}_judge{sfx}.parquet", index=False)
+    print(f"saved {name}{sfx} {emb.shape}, layers {layers.start}-{layers.stop - 1} of {L}, "
           f"judge mean {(probs @ np.arange(1, 6)).mean():.2f}, peak VRAM {torch.cuda.max_memory_allocated() / 2**30:.2f} GB")
 
 

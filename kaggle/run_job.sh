@@ -46,5 +46,7 @@ rm -rf kaggle/jobs/$JOB/out
 $K kernels output $KID -p kaggle/jobs/$JOB/out || echo "warning: kernels output exited non-zero (usually just the log)"
 # A job can opt out (marker file keep_outputs) when its outputs must not overwrite local artifacts, e.g. a
 # verification run of the notebook that is compared against them instead.
-[ -d kaggle/jobs/$JOB/out/artifacts ] && [ ! -f kaggle/jobs/$JOB/keep_outputs ] && cp kaggle/jobs/$JOB/out/artifacts/* artifacts/
+# results.csv is never copied: a job's table holds only its own rows and would replace the local one.
+[ -d kaggle/jobs/$JOB/out/artifacts ] && [ ! -f kaggle/jobs/$JOB/keep_outputs ] &&
+    find kaggle/jobs/$JOB/out/artifacts -maxdepth 1 -type f ! -name results.csv -exec cp {} artifacts/ \;
 echo "$s" | grep -q COMPLETE

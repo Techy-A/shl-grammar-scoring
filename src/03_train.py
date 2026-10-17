@@ -96,10 +96,16 @@ def main():
     ap.add_argument("--model", choices=["mean", "lgbm", "ridge", "svr"], required=True)
     ap.add_argument("--feats", nargs="+", required=True, help="artifacts/<name>.parquet tables, merged on filename")
     ap.add_argument("--crops", action="store_true", help="train/validate on test-length crops too")
+    ap.add_argument("--drop-zero", action="store_true",
+                    help="train without the score-0 clips (noise recordings the gate sets to 0); they are still predicted")
     args = ap.parse_args()
 
     train, test, crop, feat_cols = load_tables(args.feats, args.crops)
     fit_rows = pd.concat([train, crop], ignore_index=True)
+    if args.drop_zero:
+        # The score-0 clips are loud noise, not answers (Whisper even turns them into fluent text), and 08_blend.py's
+        # gate sets them to 0 anyway, so the regressors learn only from real answers.
+        fit_rows = fit_rows[fit_rows.label > 0].reset_index(drop=True)
 
     # ---- CV: average OOF over seeds; test prediction = mean over all fold models ----
     y = train.label.values

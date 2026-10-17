@@ -14,9 +14,13 @@
   base models' folds; see 10_speaker_folds.py). Fold seeds differ, so there's a small optimism shared
   by every stacking setup.
 
+* --batch: the 45.06 s recording batch (12% of the train clips, 40% of the test clips, scored lower) gets its own
+  non-negative weights, shifted so that their mean on the training batch equals the global blend's: the batch is
+  weighted differently but gets no extra offset (a batch offset made the public score worse).
+
 Output: artifacts/submission.csv and artifacts/oof_blend.parquet (out-of-fold blend predictions for
 the train clips, used by the notebook's evaluation and plots).
-Usage: python src/08_blend.py <model names: artifacts/pred_<name>.parquet> ...
+Usage: python src/08_blend.py [--batch] <model names: artifacts/pred_<name>.parquet> ...
        (the gate always uses pred_s3_ridge_wavlm.parquet, whether or not it's in the list)
 """
 import sys
@@ -28,6 +32,7 @@ from scipy.optimize import nnls
 from common import ART, fold_of
 
 GATE_MODEL, GATE = "s3_ridge_wavlm", 0.5   # train 0-clips: WavLM max 0.40; lowest non-zero clip sits far above
+BATCH_SECONDS = 45.06   # every clip of the recording batch has this length
 
 
 def fit(X, y):
@@ -36,7 +41,7 @@ def fit(X, y):
     return y.mean() - X.mean(0) @ w, w
 
 
-def blend(names):
+def blend(names, batch_weights=False):
     P = pd.concat([pd.read_parquet(ART / f"pred_{n}.parquet").set_index(["filename", "split"]).pred.rename(n)
                    for n in names], axis=1)
     ids = pd.read_parquet(ART / f"pred_{GATE_MODEL}.parquet").set_index(["filename", "split"])
@@ -45,14 +50,29 @@ def blend(names):
     is_tr = (ids.reset_index().split == "train").values
     y = ids.label.values
     folds = fold_of(ids.index.get_level_values(0)[is_tr], "gfold_s1")
+    batch = np.zeros(len(ids), bool)
+    if batch_weights:
+        dur = pd.read_parquet(ART / "feat_text_prompt.parquet").set_index(["filename", "split"]).duration
+        batch = np.abs(dur.reindex(ids.index).values - BATCH_SECONDS) < 0.05
+    X = P.values
+    Xtr, ytr, gtr, btr = X[is_tr], y[is_tr], gated[is_tr], batch[is_tr]
+
+    def predict(rows, Xp, bp):
+        """Blend fitted on the train rows `rows`, applied to Xp (bp: which of them are batch clips)."""
+        b, w = fit(Xtr[rows], ytr[rows])
+        out, extra = b + Xp @ w, None
+        if batch_weights:
+            m = rows & btr
+            bb, wb = fit(Xtr[m], ytr[m])
+            shift = (bb + Xtr[m] @ wb).mean() - (b + Xtr[m] @ w).mean()   # the batch's own offset, removed
+            out, extra = np.where(bp, bb + Xp @ wb - shift, out), wb
+        return out, b, w, extra
 
     # ---- CV of the blend itself (fold_s1) ----
-    X, oof = P.values, np.zeros(is_tr.sum())
-    Xtr, ytr, gtr = X[is_tr], y[is_tr], gated[is_tr]
+    oof = np.zeros(is_tr.sum())
     for k in range(5):
         fit_m, va = (folds != k) & ~gtr, folds == k
-        b, w = fit(Xtr[fit_m], ytr[fit_m])
-        oof[va] = b + Xtr[va] @ w
+        oof[va] = predict(fit_m, Xtr[va], btr[va])[0]
     oof = np.where(gtr, 0, np.clip(oof, 0, 5))
     print(f"blend CV RMSE {np.sqrt(np.mean((oof - ytr) ** 2)):.4f} | Pearson {np.corrcoef(oof, ytr)[0, 1]:.4f} | "
           f"MAE {np.abs(oof - ytr).mean():.4f} | gated train {gtr.sum()} "
@@ -63,12 +83,15 @@ def blend(names):
         ART / "oof_blend.parquet", index=False)
 
     # ---- Final weights on all non-gated train clips -> test ----
-    b, w = fit(Xtr[~gtr], ytr[~gtr])
+    pred, b, w, wb = predict(~gtr, X[~is_tr], batch[~is_tr])
     print("weights:", dict(zip(names, w.round(3))), "intercept", round(b, 3))
-    te = np.where(gated[~is_tr], 0, np.clip(b + X[~is_tr] @ w, 0, 5))
+    if batch_weights:
+        print(f"batch weights ({btr.sum()} train / {batch[~is_tr].sum()} test clips):", dict(zip(names, wb.round(3))))
+    te = np.where(gated[~is_tr], 0, np.clip(pred, 0, 5))
     sub = pd.DataFrame({"filename": ids.index.get_level_values(0)[~is_tr], "label": te})
     sub.to_csv(ART / "submission.csv", index=False)
 
 
 if __name__ == "__main__":
-    blend(sys.argv[1:])
+    args = sys.argv[1:]
+    blend([a for a in args if a != "--batch"], batch_weights="--batch" in args)

@@ -1,0 +1,13 @@
+feat_qwen2audio.parquet
+feat_qwen2audio_crops.parquet
+feat_qwen2audio_q.parquet
+feat_qwen2audio_q_crops.parquet
+feat_voxtral.parquet
+feat_voxtral_crops.parquet
+feat_wavlm-large.parquet
+feat_wavlm-large_crops.parquet
+feat_wavlm-base-plus.parquet
+feat_wavlm-base-plus_crops.parquet
+feat_whisper-large-v3-turbo.parquet
+feat_whisper-large-v3-turbo_crops.parquet
+folds.csv

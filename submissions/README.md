@@ -70,3 +70,156 @@ features better than SVR: Ridge on Voxtral + WavLM-base-plus + WavLM-large + Whi
 CV RMSE 0.5375 against 0.5794 for the Voxtral + WavLM-large SVR. Three models, one per kind of signal (DeBERTa ridge for
 the transcript, this ridge, WavLM-large SVR): blend CV 0.5158 against 0.5207. Same corrections (test mean matched to
 v7 - 0.118, a shift of -0.1151; full-length clips x1.15). New best public score; 2nd on the public leaderboard.
+**Kernel ridge with per-block weights** (`16_blend_kernel.csv`, 56908476, 0.3290, worse). One kernel ridge on a weighted sum of
+per-table kernels (Voxtral 1, WavLM 1, WavLM-large linear 0.25 and RBF 2, Whisper encoder 0.25, DeBERTa 0.5; weights from a
+coordinate search on seed 0) plus the DeBERTa ridge: blend CV 0.5044 against 0.5158, but the public score got worse. A fourth
+case of a CV gain from the blend's composition that does not reach the leaderboard; the weight search probably fitted the
+CV folds. Same corrections (shift -0.081 to v7 - 0.118, full-length clips x1.15). Not used.
+**Equal-weight kernel ridge** (`17_blend_kernel_equal.csv`, 0.3286, worse). The Voxtral + all-audio Ridge replaced by a kernel
+ridge over the same four tables with equal per-table weight (no weight search): blend CV 0.5085 against 0.5158, public worse,
+like 16. Both kernel versions lose about 0.008 on the public score for reasons CV does not show. Qwen2-Audio-7B hidden states
+(CV 0.573 alone, the best single table) add nothing next to Voxtral. Voxtral QLoRA stopped (fold 0: 0.764 then 0.789).
+**Short clips compressed x0.89** (`18_ridge3_short_x0.89.csv`, 0.3255, worse). The 0.3207 file with the short test clips
+(<= 55 s) scaled x0.89 around their mean, the optimum of a quadratic fitted through the x1.0 and x1.2 short-stretch probes.
+Worse: the short clips' spread is already about right, and the two-point RMSE model of the score does not hold. 15 stays best.
+
+## Identifying the leaderboard metric
+
+The competition uses a private custom metric notebook (`metric_template`); its pages only say "Pearson Correlation and RMSE".
+Five probes rescale the 0.3207 file around its mean, `m + s (p - m)`, unclipped. For s > 0 Pearson is unchanged and only RMSE
+moves; s = -1 flips the sign of Pearson.
+
+| s | 0.05 | 0.5 | 1 | 1.5 | 2 | -1 |
+|---|---|---|---|---|---|---|
+| public | 0.6225 | 0.4251 | 0.3207 | 0.4403 | 0.6659 | 1.8714 |
+
+`a * sqrt(R^2 + C (s - s0)^2) + K` fits the five s > 0 scores to 1e-5 (a squared-error form misses by 0.019; a free power
+comes out at 0.4997, so the score is linear in RMSE). The flip then separates the Pearson part: with `K = w (1 - r)` and
+`K' = w (1 + r)`, w = 0.40 and r = 0.89. So the public score is **0.6 RMSE + 0.4 (1 - Pearson)** on the public 60% of the test
+clips; for the 0.3207 file the public RMSE is about 0.46 and the Pearson about 0.89. The best scale is s0 = 0.98, so the spread is
+already calibrated (worth 0.0002). Once calibrated, RMSE moves with Pearson as well: +0.01 Pearson is worth about -0.016.
+
+**Later experiments, no submission.** CrisperWhisper verbatim transcripts for the text model: better under speaker-grouped
+folds, no gain under topic-grouped folds (`folds_topic.csv`, which match the test set's topic distance). Co-training (each
+model also learns from the blend's predictions on unlabelled held-out clips, simulated inside CV): worse under every fold
+scheme (topic-grouped 0.3268 vs 0.330 after one round, 0.340 after two). Calibration is exhausted too: re-fitting the shift
+probes with the decoded metric gives an optimal shift of -0.1179 (used: -0.118), and the best rescaling is 0.98.
+
+**Overnight search** (`21_kernel_crisper_svr.csv`, 0.3390, worse). 18 candidate models trained without the score-0 clips,
+scored on topic-grouped, strict-topic and speaker-grouped folds (3 seeds each); a greedy blend search on the topic folds
+picked the tuned kernel + a CrisperWhisper text ridge + an all-audio SVR (topic 0.3175 vs 0.3242 for the 0.3207 structure,
+better on the other two schemes too, bootstrap P = 0.99). Public 0.3390: the third public failure of the kernel models
+(16, 17, 21) although they win every CV scheme, so they are excluded from candidates. Without them, the 0.3207 structure is a
+local optimum: adding any of 13 ridge/SVR models or the transcript statistics changes the topic-fold score by less than 0.001.
+Importance weighting for the covariate shift (each training clip weighted by how test-like it looks): better only on a
+test-weighted CV score (-0.006), worse on every plain fold scheme; not submitted.
+
+**Voxtral judgement states** (`22_ridge3_voxjudge.csv`, 0.3247, worse). `11_voxtral_embed.py --last` saves the hidden states
+that come after the audio and therefore also see the scoring rubric (last token before the answer, mid and upper layers;
+mean over the rubric's tokens), computed on a free Colab T4. They are less domain-shifted than the audio states (test-vs-train
+AUC 0.79 vs 0.83), and adding them to the main ridge improves every CV scheme in both training variants (topic-grouped
+-0.0026, strict-topic -0.0024, speaker-grouped -0.0033). Submitted as a minimal change of the 0.3207 file (its raw predictions
+plus the blend difference, same corrections; correlation 0.9987): public 0.3247. The seventh change in a row that is better
+or equal in validation and worse on the public 60%; the 0.3207 file is a lucky local optimum of the public clips.
+
+**Ensemble of three blends** (`23_avg_15_14_20.csv`, **0.3195**, new best). Equal-weight average of the 3-model blend
+(0.3207), the 4-model Voxtral blend (0.3224) and the 3-model blend trained without score-0 clips (0.3242). For squared error,
+mean((a + b)/2 - y)^2 = (MSE_a + MSE_b)/2 - mean((a - b)^2)/4, so the score of an average follows from the components' public
+scores and their (label-free) differences; it was predicted at 0.3196 (and an earlier average, 19, at 0.3228 vs 0.3227 actual).
+
+**Fourth blend on other encoders** (`24_avg4_w2v_member.csv`, 0.3234, worse). A 3-model blend on encoders the ensemble
+does not use (ridge on Qwen3-4B transcript embeddings, ridge on Qwen2-Audio + w2v-BERT 2.0, SVR on w2v-BERT 2.0), built
+with the notebook's pipeline (`03_train.py --crops`, `08_blend.py`; CV RMSE 0.529, Pearson 0.904). It differs from the
+ensemble by 0.19 per clip (RMS; the members differ from each other by 0.07 to 0.14), and as a fourth equal-weight member it
+improves the out-of-fold metric under speaker-grouped folds (0.3414 to 0.3398, bootstrap P = 0.85) and, in kernel form,
+under topic-grouped (-0.0015) and strict-topic folds (-0.0031). The averaging identity put the break-even at 0.3376 for the
+blend alone, against a CV-calibrated estimate of 0.329 to 0.342. Public 0.3234: by the identity the new blend alone would
+score about 0.354, so on the public clips these encoders do about 0.02 worse than validation predicts. The eighth
+validation-better change in a row that is worse publicly.
+
+**WavLM-large layer choice** (no submission). A public solution uses WavLM-large layer 20 alone, where our features average
+layers 8-16. Per-layer features (mean and std over time, layers 12-24) show the single upper layers are better on their own:
+SVR CV RMSE 0.585 at layer 20 (0.575 at 22) against 0.597, ridge 0.590 against 0.614. In the blends they are not: replacing
+the WavLM-large SVR with the layer-20 one makes all three blends worse (ensemble OOF metric 0.3414 to 0.3457, bootstrap
+P(better) = 0.02), the layer-20 features also make the combined audio ridge and the Voxtral + WavLM SVR worse, and added as an
+extra model the layer-20 SVR gets a blend weight of 0. The middle layers carry the acoustic detail that the Voxtral states
+lack; layer 20 overlaps with Voxtral. Our component scores, re-measured the way the public solution reports them (full-clip
+validation, the 732 clips scored 1-5, trained without the noise clips), match its numbers (Voxtral ridge 0.538 vs 0.535).
+
+**Clip to [2, 5]** (`25_ens_clip2.csv`, 0.3206, worse). A public solution clips its predictions to [2, 5] (only 4 of the 732
+scored training clips are below 2). On our out-of-fold predictions it helps every blend (ensemble metric 0.3414 to 0.3402,
+bootstrap P = 1.00), and none of the 12 test clips predicted below 2 looks like a noise recording (gate scores 1.8-2.8, train
+noise clips at most 0.41). Public 0.3206 against 0.3195: those slow, hesitant answers are scored low on the public clips too.
+A separate blend for the 45.06 s batch (90 train / 87 test clips) also helps in CV, mostly through its own offset (-0.0046),
+which the batch-offset probe (13) already rejected; with that offset removed the gain is -0.0012. Not submitted.
+
+**Fine-tuned text model, CEFR classifiers, Gemini grader** (no submission). DeBERTa-v3-large fine-tuned on the
+transcripts (test-length crops, no score-0 clips, 5 folds on a free Colab T4): RMSE 0.592 on the 732 scored clips, the
+same as the frozen DeBERTa ridge; added to the blends, ensemble OOF metric -0.0016 (bootstrap P = 0.81). A document-level
+CEFR classifier (ModernBERT, Apache-2.0) correlates 0.06-0.08 with the ensemble's residuals under topic-grouped folds
+(a CC BY-NC model was not used: the rules allow only licences that permit commercial use). Gemini 3.5 Flash Lite grading
+the audio zero-shot against the rubric (`src/16_gemini_judge.py`, free tier: 500 requests a day): Pearson 0.60 with the
+labels on 38 training clips, 0.74 with the ensemble and 0.05 with its residuals, so it adds nothing the ensemble lacks.
+
+**Fine-tuned text model + batch weights** (`26_ft_batchw.csv`, **0.3175**, new best, 3rd on the public leaderboard).
+The three blends each get the fine-tuned DeBERTa-v3-large text model (`06_finetune_text.py --crops --drop-zero`) as an extra
+model, and separate non-negative weights for the 45.06 s recording batch (90 train / 87 test clips), re-centred to the global
+blend's mean on the training batch so the batch gets no extra offset (a batch offset was rejected by probe 13). Out-of-fold
+ensemble metric 0.3414 -> 0.3390 (bootstrap P = 0.86). On the batch the blends drop the WavLM-large SVR and lean on the
+text models and the combined audio ridge. Same corrections as before (mean 3.228668, full-length clips x1.15).
+
+**Leaderboard-weighted mix** (`27_lb_weighted_mix.csv`, **0.3158**, new best, 2nd on the public leaderboard). Weighted
+average of four scored submissions: 26 (0.650), the Qwen2-Audio member `cand_qwen3.csv` (0.178), `11_blend_v7_biasfix.csv`
+(0.122) and 15 (0.050). The weights minimise the public MSE predicted from the files' public scores and their label-free
+differences (w'Gw with G_ij = (MSE_i + MSE_j - mean((p_i - p_j)^2)) / 2, weights >= 0 summing to 1); predicted 0.3153.
+Unlike every earlier average, these weights are tuned on the public leaderboard, so the private score may gain less.
+
+**Weighted mix with the batch-offset file** (`28_lb_weighted_mix2.csv`, **0.3150**, new best). The same public-score
+weighting over more scored files picks up the batch-offset submission (13): 0.624 x 26, 0.200 x 13, 0.095 x the
+Qwen2-Audio member, 0.058 x 15, 0.023 x 11; predicted 0.3145. In effect a partial offset for the 45.06 s batch, which on
+its own (13) had made the score worse. Tuned on the public clips like 27.
+
+**RoBERTa-large instead of the DeBERTa fine-tune** (`29_roberta_batchw.csv`, 0.3225, worse). RoBERTa-large fine-tuned the
+same way (Kaggle 2x T4, `06_finetune_text.py --model roberta-large --crops --drop-zero`): RMSE 0.602 on the 732 scored
+clips, correlation 0.93 with the DeBERTa fine-tune. In place of it in each blend: out-of-fold metric 0.3390 to 0.3368
+(bootstrap P = 0.80), but public 0.3225 against 0.3175, and it adds nothing to the public-score weighting (weight 0.06).
+
+**Nine seeds of the DeBERTa fine-tune** (`30_ft_seed9.csv`, 0.3196, worse). The fine-tune of 26 averaged over 9 seeds
+(`06_finetune_text.py --seed`): RMSE 0.572 on the 732 scored clips against 0.592 for one run; out-of-fold metric of the
+main model 0.3390 to 0.3371 (bootstrap P = 0.88), but public 0.3196 against 26's 0.3175, so 26's single run was lucky on
+the public clips. It gets weight 0 in the public-score weighting (best mix of all scored files predicted at 0.3139).
+
+**Later experiments, no submission** (12 Oct). None improved the out-of-fold metric beyond the nine-seed fine-tune:
+Voxtral-Small-24B in 4-bit (ridge RMSE 0.615 against Voxtral-Mini's 0.601); Phi-4-multimodal audio-LLM states
+(`17_phi4mm_embed.py`, ridge 0.668, no blend gain); Phi-4 transcripts for the fine-tune (`--tag phi4`: correlation 0.95
+with the Whisper version, blend 0.3379 against 0.3371); Qwen2.5-7B with LoRA as a regressor (`--lora`, two pilot folds no
+better than DeBERTa, correlation 0.03 with the blend's residuals); batch weights shrunk toward the global weights (worse
+than fully separate weights at every strength).
+
+**Nine-seed fine-tune plus Phi-4 audio states** (`31_ft_seed9_phi4.csv`, 0.3203, worse). 30 with a ridge on
+Phi-4-multimodal states added to each blend; out-of-fold metric 0.3371 (same as 30). Its predictions differ from 28 by
+0.114 RMS, so it was submitted to test whether it helps the public-score weighting: weight 0.33, best mix of all scored
+files predicted at 0.3132 (28: 0.3150). Not submitted, since it would not pass the next scores on the leaderboard (0.3126).
+
+**Weighted average of six submissions** (`32_lb_weighted_mix3.csv`, **0.3134, new best**). Same method as 28, now with
+31 among the inputs and the shift probes converted exactly (a shift does not change Pearson, so their RMSE is
+(score - 0.4 (1 - r)) / 0.6 rather than proportional to the score). Weights: 31 0.330, 26 0.230, 13 0.198,
+probe_stretch_short_x1.2 0.109, probe_biasfix_full_minus0.1 0.090, 29 0.042; predicted 0.3132. The weights are fitted to
+public scores, so this step is tuned to the public 60% of the test clips.
+
+**Attention pooling on Voxtral frames** (`33_attn_pool.csv`, 0.3178). 26 with one more model in each blend: a small
+attention-pooling head (`20_attn_pool.py`) on Voxtral frame states cached once per clip (`19_voxtral_frames.py`,
+PCA to 256 dimensions), trained on a new random test-length prefix of every clip in every epoch. A prefix of the
+frames matches the true crop embedding closely (median per-clip correlation 0.997). Alone: RMSE 0.576 on the 732
+scored clips (Voxtral ridge 0.584); correlation 0.078 with the blend's residuals; out-of-fold metric of the main model
+0.3390 to 0.3340 (bootstrap P = 0.96), the largest gain since the fine-tuned text model.
+
+**Weighted average of six submissions** (`34_lb_weighted_mix4.csv`, **0.3116, new best, 2nd**). Same method as 32,
+with 33 among the inputs: 33 0.494, 13 0.215, probe_biasfix_full_minus0.1 0.120, 31 0.089, probe_stretch_short_x1.2
+0.081, cand_qwen3 0.001; predicted 0.3110. Weights fitted to public scores (tuned to the public 60% of the test clips).
+
+**After 34, no submission** (12 Oct). Attention-pooling heads on Phi-4-multimodal and WavLM-large frames
+(`19_voxtral_frames.py --source`, `20_attn_pool.py --source`): weaker alone (RMSE 0.626 and 0.645 on the scored clips)
+and worse next to the Voxtral head (out-of-fold metric 0.3340 to 0.3352-0.3365). Task-adaptive pretraining of DeBERTa
+on all transcripts before the fine-tune (`18_tapt.py`, MLM loss 6.1 to 2.7): RMSE 0.594, correlation 0.96 with the
+current fine-tune; replacing it 0.3340 to 0.3345, adding it 0.3351.
