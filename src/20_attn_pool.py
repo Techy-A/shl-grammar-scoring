@@ -11,10 +11,16 @@ Training: without the score-0 clips (the 08_blend.py gate handles them), MSE, Ad
 averaged per clip; test: the full clips, averaged over folds and seeds.
 --check compares the prefix approximation with the true crop embeddings of 11_voxtral_embed.py (feat_voxtral_crops).
 --source phi4 / wavlm-large trains on that encoder's frame cache (19_voxtral_frames.py --source) -> pred_vp_attn_<source>.
+--text conditions the head on the transcript: the frozen DeBERTa embedding (04_text_embed.py, PCA to 64) of the crop
+whose length is closest to the frame prefix (the 4 standard crops or the full clip; the full clip at test) shifts the
+attention logits and joins the pooled vector, so the head can learn where to listen given what was said -> _text.
+--dropout / --ema: head dropout (default 0.1) and an exponential moving average of the weights used for prediction
+(e.g. 0.99; default off) -> _do<p> / _ema<d>.
 Output: artifacts/pred_vp_attn.parquet (+ a results.csv row)
 Usage : python src/20_attn_pool.py [--check] [--epochs 40] [--source voxtral]
 """
 import argparse
+import copy
 
 import numpy as np
 import pandas as pd
@@ -28,34 +34,56 @@ dev = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class Head(nn.Module):
-    def __init__(self, d=256, h=128):
+    def __init__(self, d=256, h=128, dropout=0.1, dt=0):
         super().__init__()
-        self.proj = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, h), nn.GELU(), nn.Dropout(0.1))
+        self.proj = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, h), nn.GELU(), nn.Dropout(dropout))
         self.att = nn.Linear(h, 1)
-        self.out = nn.Linear(3 * h, 1)
+        self.out = nn.Linear(3 * h + (h if dt else 0), 1)
+        if dt:   # created last, so the audio-only head keeps its initialisation
+            self.tproj = nn.Sequential(nn.LayerNorm(dt), nn.Linear(dt, h), nn.GELU(), nn.Dropout(dropout))
 
-    def forward(self, x, m):   # x (B, T, d), m (B, T) 1 = real frame
+    def forward(self, x, m, t=None):   # x (B, T, d), m (B, T) 1 = real frame, t (B, dt) transcript embedding
         h = self.proj(x)
-        a = self.att(h).squeeze(-1).masked_fill(m == 0, -1e4).softmax(-1).unsqueeze(-1)
+        ht = self.tproj(t) if t is not None else None
+        a = self.att(h if ht is None else h + ht.unsqueeze(1)).squeeze(-1).masked_fill(m == 0, -1e4).softmax(-1).unsqueeze(-1)
         w = m.unsqueeze(-1) / m.sum(1, keepdim=True).unsqueeze(-1)
         mean = (h * w).sum(1)
         std = ((h - mean.unsqueeze(1)) ** 2 * w).sum(1).clamp_min(1e-6).sqrt()
-        return self.out(torch.cat([(h * a).sum(1), mean, std], -1)).squeeze(-1)
+        return self.out(torch.cat([(h * a).sum(1), mean, std] + ([] if ht is None else [ht]), -1)).squeeze(-1)
 
 
-def batch(F, start, n):   # pad prefixes of n[i] frames from clip offsets start[i] -> (x, mask)
+def text_table(train, test, dim=64):
+    """Frozen DeBERTa transcript embeddings, PCA-reduced on the train rows: (train views (5, n, dim) as crop0-3 + full,
+    test (n_test, dim)). Crop transcripts are of the crops themselves (01_transcribe.py --crops), so nothing leaks."""
+    full = pd.read_parquet(ART / "feat_emb_deberta-v3-large_prompt.parquet")
+    crop = pd.read_parquet(ART / "feat_emb_deberta-v3-large_prompt_crops.parquet")
+    cols = [c for c in full.columns if c.startswith("e")]
+    get = lambda df, split, names: df[df.split == split].set_index("filename").loc[names, cols].values.astype(np.float32)
+    views = [get(crop, f"crop{k}", train.filename) for k in range(N_CROPS)] + [get(full, "train", train.filename)]
+    te = get(full, "test", test.filename)
+    X = np.concatenate(views)
+    mu = X.mean(0)
+    basis = np.linalg.svd(X - mu, full_matrices=False)[2][:dim].T
+    sd = ((X - mu) @ basis).std(0)
+    proj = lambda a: ((a - mu) @ basis / sd).astype(np.float32)
+    return np.stack([proj(v) for v in views]), proj(te)
+
+
+def batch(F, start, n, t=None):   # pad prefixes of n[i] frames from clip offsets start[i] -> (x, mask[, text])
     T = int(max(n))
     x = np.zeros((len(n), T, F.shape[1]), np.float32)
     m = np.zeros((len(n), T), np.float32)
     for i, (s, k) in enumerate(zip(start, n)):
         x[i, :k], m[i, :k] = F[s:s + k], 1
-    return torch.from_numpy(x).to(dev), torch.from_numpy(m).to(dev)
+    out = (torch.from_numpy(x).to(dev), torch.from_numpy(m).to(dev))
+    return out if t is None else out + (torch.from_numpy(t).to(dev),)
 
 
 @torch.inference_mode()
-def predict(model, F, start, n):
+def predict(model, F, start, n, t=None):
     model.eval()
-    return np.concatenate([model(*batch(F, start[i:i + 64], n[i:i + 64])).cpu().numpy() for i in range(0, len(n), 64)])
+    return np.concatenate([model(*batch(F, start[i:i + 64], n[i:i + 64], None if t is None else t[i:i + 64])).cpu().numpy()
+                           for i in range(0, len(n), 64)])
 
 
 def main():
@@ -64,11 +92,16 @@ def main():
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--source", default="voxtral")
     ap.add_argument("--seeds", type=int, default=len(SEEDS), help="more seeds -> name gets _s<n> (and _e<epochs> if changed)")
+    ap.add_argument("--text", action="store_true", help="condition on the transcript embedding of the matching crop")
+    ap.add_argument("--dropout", type=float, default=0.1)
+    ap.add_argument("--ema", type=float, default=0.0, help="EMA decay of the weights used for prediction (0 = off)")
     args = ap.parse_args()
     z = np.load(ART / f"{args.source}_frames.npz", allow_pickle=True)
     name = "vp_attn" + ("" if args.source == "voxtral" else f"_{args.source}")
     seeds = list(range(args.seeds))
     name += (f"_s{args.seeds}" if args.seeds != len(SEEDS) else "") + (f"_e{args.epochs}" if args.epochs != 40 else "")
+    name += ("_text" if args.text else "") + (f"_do{args.dropout:g}" if args.dropout != 0.1 else "") + \
+        (f"_ema{args.ema:g}" if args.ema else "")
     F = z["frames"].astype(np.float32)
     ids = pd.DataFrame({"filename": z["filename"], "split": z["split"], "start": z["start"], "lens": z["lens"]})
     train = pd.read_csv(DATA / "train.csv").merge(ids[ids.split == "train"], on="filename")   # train.csv order
@@ -84,6 +117,12 @@ def main():
         r = [np.corrcoef(a, b)[0, 1] for a, b in zip(true, pref)]
         return print(f"prefix approximation, crop 0: per-clip correlation median {np.median(r):.4f}, min {np.min(r):.4f}")
 
+    if args.text:   # views 0-3 = the standard crops, 4 = the full clip; view lengths in frames for the nearest match
+        tview, tte = text_table(train, test)
+        vlen = np.stack(crops + [train.lens.values])                          # (5, n)
+        # ponytail: nearest view by length, so a training prefix can get a slightly longer transcript; validation and
+        # test always pair matching audio and text. Restrict to views no longer than the prefix if this ever matters.
+        nearest = lambda n, rows: np.abs(vlen[:, rows] - n[rows]).argmin(0)   # view index per row
     y = train.label.values.astype(np.float32)
     folds = fold_of(train.filename, "gfold_s0")
     test_durs = pd.read_parquet(ART / "feat_text_prompt.parquet").query("split == 'test'").duration.values
@@ -93,9 +132,10 @@ def main():
             torch.manual_seed(seed * 10 + k)
             rng = np.random.default_rng(seed * 10 + k)
             tr = np.where((folds != k) & (y > 0))[0]
-            model = Head().to(dev)
+            model = Head(dropout=args.dropout, dt=tview.shape[2] if args.text else 0).to(dev)
             with torch.no_grad():
                 model.out.bias.fill_(float(y[tr].mean()))
+            ema = copy.deepcopy(model) if args.ema else None
             opt = torch.optim.AdamW(model.parameters(), lr=1e-3, weight_decay=0.01)
             sched = torch.optim.lr_scheduler.OneCycleLR(opt, 1e-3, total_steps=args.epochs * int(np.ceil(len(tr) / BS)))
             for ep in range(args.epochs):
@@ -104,15 +144,22 @@ def main():
                 n = to_frames(rng.choice(test_durs, len(train)) * SR)   # a random test-length prefix per clip
                 for i in range(0, len(order), BS):
                     b = order[i:i + BS]
-                    loss = nn.functional.mse_loss(model(*batch(F, train.start.values[b], n[b])), torch.from_numpy(y[b]).to(dev))
+                    t = tview[nearest(n, b), b] if args.text else None
+                    loss = nn.functional.mse_loss(model(*batch(F, train.start.values[b], n[b], t)), torch.from_numpy(y[b]).to(dev))
                     opt.zero_grad()
                     loss.backward()
                     opt.step()
                     sched.step()
+                    if ema is not None:
+                        with torch.no_grad():
+                            for pe, pm in zip(ema.parameters(), model.parameters()):
+                                pe.mul_(args.ema).add_(pm, alpha=1 - args.ema)
+            final = ema if ema is not None else model
             va = np.where(folds == k)[0]
-            p = np.mean([predict(model, F, train.start.values[va], c[va]) for c in crops], axis=0)
+            p = np.mean([predict(final, F, train.start.values[va], c[va], tview[j, va] if args.text else None)
+                         for j, c in enumerate(crops)], axis=0)
             oof[va] += p / len(seeds)
-            te += predict(model, F, test.start.values, test.lens.values) / (len(seeds) * 5)
+            te += predict(final, F, test.start.values, test.lens.values, tte if args.text else None) / (len(seeds) * 5)
             sc = y[va] > 0
             print(f"seed {seed} fold {k}: val RMSE (scored) {np.sqrt(np.mean((p[sc] - y[va][sc]) ** 2)):.4f}", flush=True)
 

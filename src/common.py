@@ -10,6 +10,7 @@ Pipeline (each script caches its output in artifacts/ for the next):
   07_finetune_audio.py  WavLM fine-tuned to predict the score from the audio
   08_blend.py           score-0 gate + non-negative blend of all predictions -> submission.csv
 """
+import os
 from pathlib import Path
 
 import numpy as np
@@ -19,7 +20,8 @@ import torch
 from torch import nn
 from transformers import get_linear_schedule_with_warmup
 
-ON_KAGGLE = Path("/kaggle/input").exists()
+# SHL_LOCAL=1 forces the local layout on a machine that happens to have a /kaggle directory.
+ON_KAGGLE = Path("/kaggle/input").exists() and not os.environ.get("SHL_LOCAL")
 
 if ON_KAGGLE:
     # Competition data is mounted read-only; outputs must go to /kaggle/working to be downloadable.
@@ -94,7 +96,12 @@ def crop_lengths(n):
     the test clips' own durations, seed 0. Shared by 05_audio_embed.py and 07_finetune_audio.py so
     every model is validated on exactly the same crops."""
     rng = np.random.default_rng(0)
-    test_len = np.array([sf.info(DATA / "test" / f).frames for f in pd.read_csv(DATA / "test.csv").filename])
+    names = pd.read_csv(DATA / "test.csv").filename
+    if (DATA / "test").exists():
+        test_len = np.array([sf.info(DATA / "test" / f).frames for f in names])
+    else:   # features-only checkout (no audio): the durations cached by 02_text_features.py, in test.csv order
+        dur = pd.read_parquet(ART / "feat_text_prompt.parquet").query("split == 'test'").set_index("filename").duration
+        test_len = np.round(dur.reindex(names).values * SR).astype(int)
     return [rng.choice(test_len, n) for _ in range(N_CROPS)]
 
 
