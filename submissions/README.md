@@ -223,3 +223,25 @@ with 33 among the inputs: 33 0.494, 13 0.215, probe_biasfix_full_minus0.1 0.120,
 and worse next to the Voxtral head (out-of-fold metric 0.3340 to 0.3352-0.3365). Task-adaptive pretraining of DeBERTa
 on all transcripts before the fine-tune (`18_tapt.py`, MLM loss 6.1 to 2.7): RMSE 0.594, correlation 0.96 with the
 current fine-tune; replacing it 0.3340 to 0.3345, adding it 0.3351.
+
+**Overnight experiments, 17-18 Oct, no submission.** Three procedure changes to the attention-pooling head
+(`20_attn_pool.py --text / --dropout 0 / --ema 0.99`, Kaggle job `shl-headvar`, all variants retrained together on 2x
+T4). They are judged at the main-model level, swapping the head in all three blends, on out-of-fold
+0.6·RMSE + 0.4·(1 − r). The baseline is 0.3387 on these runs.
+- Transcript conditioning: the DeBERTa embedding of the matching crop shifts the attention logits and joins the pooled
+  vector. Result +0.0034, worse (bootstrap P(better) 0.02). As an extra blend member instead of a replacement: +0.0003.
+- Weight EMA (0.99): 0.0000.
+- Dropout 0: −0.0002, within noise.
+- **Noise reference:** the same head trained on CPU instead of GPU gives −0.0003 with P = 0.92. A clip bootstrap alone
+  does not capture training noise, so P ≈ 0.9 from a single retrain is not evidence. Frozen-feature heads look
+  exhausted.
+
+**Public-score mixes with small negative weights** (`35_lb_mix_neg0.10.csv`, `36_lb_mix_neg0.15.csv`, 18 Oct, both
+public-tuned). The same method as 34 (`src/21_lb_mix.py`), with the lower bound on the weights moved below 0. With
+weights ≥ 0 the script reproduces 34 (predicted 0.3107, scored 0.3116).
+- 35, weights ≥ −0.10 (Σ|w| 5.0): predicted 0.3050, scored **0.3068**.
+- 36, weights ≥ −0.15 (Σ|w| 6.4): predicted 0.3035, scored **0.3064**. This ties first place on the public leaderboard
+  and ranks 2nd on time.
+- The forecast error grew with the weights' size (+0.0018 and +0.0029, against +0.0006 for 34), as expected.
+- Both files are fitted to the public 60% of the test clips, so their private score is expected to fall back toward
+  the main model's. The main model alone (33, 0.3178) involves no public tuning.
