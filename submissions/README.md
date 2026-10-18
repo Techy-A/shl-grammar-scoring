@@ -245,3 +245,10 @@ weights ≥ 0 the script reproduces 34 (predicted 0.3107, scored 0.3116).
 - The forecast error grew with the weights' size (+0.0018 and +0.0029, against +0.0006 for 34), as expected.
 - Both files are fitted to the public 60% of the test clips, so their private score is expected to fall back toward
   the main model's. The main model alone (33, 0.3178) involves no public tuning.
+
+**Final submission** (`final_submission.csv`, **0.3062, 1st on the public leaderboard**, 18 Oct). The same mix
+(`src/21_lb_mix.py`) with 35 and 36 added as inputs and weights ≥ −0.20 (Σ|w| 8.6).
+- Raw forecast 0.3019. Corrected for the drift seen on 34-36 (about +0.00045 per unit of Σ|w|), the forecast was
+  0.3058; it scored 0.3062.
+- Like 34-36, it is fitted to the public 60% of the test clips, so its private score is expected to fall back toward
+  the main model's (33, 0.3178).
