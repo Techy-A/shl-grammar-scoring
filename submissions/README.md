@@ -252,3 +252,66 @@ weights ≥ 0 the script reproduces 34 (predicted 0.3107, scored 0.3116).
   0.3058; it scored 0.3062.
 - Like 34-36, it is fitted to the public 60% of the test clips, so its private score is expected to fall back toward
   the main model's (33, 0.3178).
+
+**Main-model procedure changes, 19 Oct, no submission (draft).** Four candidate changes to how members are trained or
+corrected, each judged at the main-model level (the three blends of 33, `08_blend.py --batch` logic) on speaker-grouped
+out-of-fold predictions at the 4 test-length crops, metric 0.6·RMSE + 0.4·(1 − r), paired bootstrap over the 769 clips.
+- **Baseline.** The cached `pred_*.parquet` files give 0.3387 (the overnight baseline). All arms below retrain the
+  ridge/SVR members with an exact fast re-implementation of `03_train.py` (eigen-decomposition ridge, same alpha
+  search; SVRs identical to the cached files, the ridges match `results.csv` but not the cached ridge files, e.g. DeBERTa
+  ridge RMSE 0.7775 vs 0.7758), so the comparable baseline is **0.3386** (blend folds gfold_s1; 0.3383 with gfold_s0,
+  0.3376 with gfold_s2). The ridge/SVR members are deterministic; the noise reference is the attention head retrained
+  on CPU instead of GPU (`pred_vp_attn_cpunb`, baseline 0.3383) and the three fold seeds of the blend.
+- **Soft pseudo-labels, all eight ridge/SVR members** (`src/22_pseudo_label.py --members <all>`). Fold-honest: in fold
+  k the pseudo rows are the fold-k crops plus the test clips, labelled by the main model built from the fold-k member
+  models with blend weights fitted without fold k (that teacher scores 0.3394, like the OOF; a first version with
+  in-sample blend weights scored 0.329 and was discarded as leaky). Every member gets much better on its own (WavLM-large
+  SVR metric 0.407 to 0.335) but the main model gets **worse**: w 0.3 +0.0019 (P(better) 0.04), w 0.5 +0.0018 (P 0.05),
+  same sign under all three blend fold seeds. The members move toward the teacher and the blend loses diversity. Split by
+  member (w 0.5): DeBERTa ridges −0.0009 (P 0.99), Whisper ridge +0.0002, Voxtral+audio ridges +0.0014 (P 0.001),
+  WavLM-large SVRs +0.0021 (P 0.03), Voxtral+WavLM-large SVR −0.0001. The attention head was not pseudo-labelled
+  (about an hour per arm on CPU, and distillation into the other audio members hurt).
+- **Soft pseudo-labels, the two DeBERTa text ridges only** (`src/22_pseudo_label.py`, default; the subset was chosen
+  after the all-member arm failed). w 0.1 −0.0004, 0.3 −0.0007, 0.5 −0.0009, **1 −0.0011 (0.3386 to 0.3375, P 0.987)**,
+  2 −0.0012 (P 0.97), 4 −0.0012 (P 0.94). At w 1: blend folds gfold_s0 −0.0010 (P 0.98), gfold_s2 −0.0007 (P 0.92);
+  with the CPU-retrained head in both arms −0.0011 (P 0.988), −0.0011, −0.0007. Leak controls: members from fold seed 0
+  only (every teacher input fold-honest) −0.0007 (P 0.95), seed 1 −0.0009, seed 2 −0.0012; no test pseudo rows −0.0009
+  (P 0.98). On random 130-clip subsets (the public size) the gain is −0.0011 ± 0.0012 (better in 83%). The text ridges
+  move toward the main model (correlation with its OOF 0.85 to 0.90) and their blend weight doubles (0.10 to 0.20).
+  Test file `artifacts/cand_33_textpl.csv` = 33 plus the change this makes to the recomputed main model (RMS 0.013, mean
+  −0.0001, correlation with 33 0.9999). **Forecast** (before any submission): public 0.3178 − 0.0009 = **0.3169**, noise
+  sd about 0.001 on the public clips (worst-case identity bounds 0.3101-0.3255). For the public-score mix, swapping 33
+  for this file moves it by its effective weight times that change (well under 0.001); re-fitting the mix needs the
+  file's real public score. Passes the bar (P ≥ 0.9, a training change, stable over head retrains and fold seeds), but
+  the gain is a tenth of the public leaderboard's resolution and the member subset was picked after looking.
+- **Transductive standardisation of the evaluation rows** (ridge/SVR members refit-free: the held-out crops of fold k,
+  and at test the 216 test clips, are standardised with their own statistics and mapped onto the training rows').
+  Whole set, mean + std: −0.0021 (P 0.94), gfold_s0 −0.0037, gfold_s2 −0.0029. Per batch group (45.06 s batch / rest),
+  mean only: −0.0039 (P 0.997), −0.0047, −0.0039. Non-transductive control (map from the training crops' statistics, a
+  pure length correction): +0.0001, so the gain comes from the evaluation set's own statistics. Not trusted: in CV the
+  held-out fold has the training label distribution by construction (stratified folds), so aligning its statistics to the
+  training rows is free there, while on test it changes the group means CV cannot judge. The per-batch version lowers the
+  test batch's raw mean by 0.10 relative to the other clips (3.128/3.425 to 3.033/3.433), an implicit batch offset like
+  the one probe 13 rejected; the whole-set version moves it +0.05 the other way. With each fold's mean matched to the
+  training labels in both arms the whole-set gain is −0.0011/−0.0026/−0.0007 (gfold_s0/s1/s2, P 0.88/0.98/0.74).
+- Decomposition: mean only (whole set) −0.0011 (P 0.83), gfold_s0 −0.0025, gfold_s2 −0.0018. **Std only** (each
+  feature's spread in the evaluation set scaled to the training rows', mean kept): **−0.0010 (0.3386 to 0.3376,
+  P 0.997)**, gfold_s0 −0.0012 (P 1.00), gfold_s2 −0.0011 (P 0.999); 130-clip subsets −0.0010 ± 0.0009. This formally
+  passes the bar, but the test clips are far more shifted than a CV fold: the std-only version moves the OOF by 0.013
+  RMS and the test predictions by 0.052 (full-length clips −0.057 on average, short non-batch clips −0.040, batch clips
+  +0.008, i.e. group-relative shifts of the kind probes 13 and the short-clip stretch rejected). CV validates a change
+  four times smaller than the one it would make on test, so its forecast is an extrapolation: file
+  `artifacts/cand_33_tstd4.csv` (33 plus the change, RMS 0.047, correlation 0.9986), public 0.3168 if the gain scales
+  with the change as in CV, about 0.3193 if the change is unrelated to the public errors, noise sd about 0.0025;
+  worst-case identity bounds 0.290-0.346. Not recommended without a probe.
+TSTD5
+- **Extremes recalibration** (nested over the blend folds, applied to the main model's OOF). The OOF is already
+  calibrated: the slope of the label on the prediction is 1.007, and stretching around the mean is best at 1.0 (0.95:
+  0.3402, 1.05: 0.3391). Isotonic +0.0041 to +0.0075 (P ≤ 0.08), half isotonic +0.0000 to +0.0016, linear +0.0027 to
+  +0.0035, piecewise linear with separate slopes below/above the mean +0.0027 to +0.0037, the same per batch +0.0004 to
+  +0.0032. All worse. The pull toward the mean at scores 1.5-2 and 5 is regression to the mean of a calibrated
+  predictor (E[y | p] is right, E[p | y] is not), not something a monotone map can fix.
+- **Distributional target** for the two DeBERTa text members (multinomial logistic over the label grid on 128 PCA
+  dimensions, prediction = expected score, C by grouped inner CV). Alone worse (metric 0.612 vs 0.555); in the blends
+  −0.0012 (P 0.86), gfold_s0 −0.0015 (P 0.93), gfold_s2 −0.0011 (P 0.85). Below the bar, and as a weaker model that
+  helps by differing it is closer to a composition change.
