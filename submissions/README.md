@@ -304,7 +304,13 @@ out-of-fold predictions at the 4 test-length crops, metric 0.6·RMSE + 0.4·(1 �
   `artifacts/cand_33_tstd4.csv` (33 plus the change, RMS 0.047, correlation 0.9986), public 0.3168 if the gain scales
   with the change as in CV, about 0.3193 if the change is unrelated to the public errors, noise sd about 0.0025;
   worst-case identity bounds 0.290-0.346. Not recommended without a probe.
-TSTD5
+- Stress test of the std-only version: the evaluation set's spread taken with the 45.06 s batch reweighted to 40% (the
+  test set's share; the training folds have 12%): −0.0007 (P 0.98), gfold_s0 −0.0005 (P 0.92), gfold_s2 −0.0006
+  (P 0.96). The gain falls by about 40% as soon as the evaluation set looks a little more like the test set, which
+  supports reading it as partly a CV artefact.
+- Verdict for this round: only the text-ridge pseudo-labels pass the bar with a test-side change inside the validated
+  range (RMS 0.013 on test vs 0.016 on OOF); forecast 0.3169 for the main model, against 0.3178. Nothing here is close to
+  the 0.29-0.30 needed to matter on the leaderboard, and none was submitted.
 - **Extremes recalibration** (nested over the blend folds, applied to the main model's OOF). The OOF is already
   calibrated: the slope of the label on the prediction is 1.007, and stretching around the mean is best at 1.0 (0.95:
   0.3402, 1.05: 0.3391). Isotonic +0.0041 to +0.0075 (P ≤ 0.08), half isotonic +0.0000 to +0.0016, linear +0.0027 to
