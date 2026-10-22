@@ -10,10 +10,10 @@ The model listens to 45â€“60 s of spontaneous spoken English and predicts a **0â
 
 | | |
 |---|---|
-| **Best public leaderboard** | **0.3116** (lower is better; #1 is 0.3064) |
-| **Main model alone** | 0.3178 (no weights tuned on the leaderboard) |
-| **Training RMSE** (out-of-fold, speaker-grouped) | **0.500** |
+| **Main model** (no tuning on the leaderboard) | **public 0.3178** (lower is better) |
+| **Training RMSE** (out-of-fold, speaker-grouped, test-length crops) | **0.500** |
 | **Training Pearson r** (out-of-fold) | **0.915** |
+| Public-tuned variants | light leaderboard calibration (weights fitted to public scores) reached 0.3116; not part of the method, see section 8 of the report below |
 | **Notebook + full report** | [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb) |
 | **Report (web page)** | [techy-a.github.io/shl-grammar-scoring/report](https://techy-a.github.io/shl-grammar-scoring/report/) |
 | **Every submission, with its score** | [`submissions/README.md`](submissions/README.md) |
