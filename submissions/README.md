@@ -397,3 +397,33 @@ each arm under the three blend fold seeds (gfold_s0/s1/s2). Baseline with the ca
     0.0035 on the public clips. By the averaging identity the change costs mean(Δ²) = 0.0022 in MSE and pays only if it
     correlates with 33's errors at ≥ 0.05 (RMS change / (2 × public RMSE ≈ 0.46)); in OOF the realised correlation is
     0.14 against a break-even 0.06.
+
+**Public-score calibration probes, 22 Oct (public-tuned, made outside this log's scripts).** About 20 submissions between
+14:19 and 14:51 IST. Each probe shifts one group of test clips by a fixed amount, and its public score measures that
+group's public bias. The calibrated files apply the measured shifts. The probe and calibration code is not in this
+repository, so only the submission descriptions are recorded here. The base "37" they refer to is not among the
+account's listed submissions.
+
+| File | Public | What it does |
+|---|---|---|
+| p1_topic_memorable_minus0.1 | 0.3162 | clips on the "memorable" topic −0.1 |
+| p1_topic_memorable_plus0.1 | 0.3029 | the same +0.1 |
+| p2_rest_minus0.1 | 0.3014 | the other clips −0.1 (on 37) |
+| p3_restbatch_plus0.1 | 0.3038 | on the r2 base (37 with the rest −0.065) |
+| p3_restshort_minus0.1 | 0.3032 | on the r2 base |
+| **38_group_calibrated** | **0.3003** | group calibration: memorable topic +0.1, rest −0.065, recording-type subgroups refined |
+| p7_membatch_minus0.05 | 0.3003 | memorable topic and 45 s batch −0.05 (on 38) |
+| p8_newtopics_plus0.1 | 0.3018 | test-heavy topics (holiday destination, movies) +0.1 (on 38) |
+| p9_memstretch_x1.15 | 0.3020 | memorable topic stretched ×1.15 around its mean (on 38) |
+| 39_audio_only | 0.3381 | audio-only blend (Voxtral ridge, attention head, WavLM SVR, Whisper ridge), standard corrections; mix member |
+| 40_text_only | 0.3661 | text-only blend (DeBERTa ridges + fine-tune), standard corrections; mix member |
+| blk0 … blk8_plus0.1 | 0.2975–0.3046 | test files in blocks of 24 (0-23, 24-47, …, 192-215), each +0.1 on 38: blk0 0.3012, blk1 0.3028, blk2 0.3001, blk3 0.3029, blk4 0.2975, blk5 0.3046, blk6 0.3039, blk7 0.2991, blk8 0.3007 |
+| **41_block_calibrated** | **0.2904, 1st on public** | 38 + block calibration: each block of 24 test files shifted by the amount its probe implies |
+
+- **What this is.** Group probing of the public split: the measurement the research report (section 9) set aside
+  as leaderboard gaming. The shifts are fitted to the public 60% of the clips, so their private value is unknown and
+  could be negative.
+- **Text-only and audio-only.** 40 at 0.3661 and 39 at 0.3381 confirm, on the public split, that audio carries most of
+  the signal, as in the out-of-fold results.
+- **Kept separate**, per CLAUDE.md: the honestly validated main model (33, 0.3178; with the round-1/2 stack, forecast
+  0.3159) stays the safe final pick; 41 is the public-tuned bet.
