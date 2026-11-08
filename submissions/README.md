@@ -3,6 +3,9 @@
 Each file is a `filename,label` prediction for the 216 `test.csv` clips, produced by `src/08_blend.py`.
 Lower is better; the competition evaluates with RMSE and Pearson correlation.
 
+The probe files (constant shifts and rescalings submitted only to measure the metric and the test bias) are not
+included here; each probe's result is logged in the sections below.
+
 | File | Kaggle ref | Blend | Rounded to 0.5 | CV MAE | Public score |
 |---|---|---|---|---|---|
 | `01_blend_v1.csv` | 56860586 | score-0 gate + LightGBM, DeBERTa Ridge, WavLM Ridge, DeBERTa fine-tune, WavLM+DeBERTa Ridge | no | 0.370 | 0.3463 |

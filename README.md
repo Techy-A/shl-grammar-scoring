@@ -1,50 +1,72 @@
-# Spoken Grammar Scoring
+<p align="center">
+  <img src="./assets/readme/hero.svg" width="100%" alt="Spoken Grammar Scoring: a model that listens to 45 to 60 seconds of spontaneous English and predicts the 0 to 5 grammar score a human rater would give. Plain speech recognition writes 'so he doesn't like it'; with a verbatim prompt the transcript keeps the spoken error 'so he don't like it'.">
+</p>
 
-> What the speaker said: *"he **don't** like it"*
-> What Whisper wrote: *"he **doesn't** like it"*
->
-> Speech recognisers correct grammar by default, which removes the very errors this model has to score.
+<p align="center">
+  <a href="notebook/shl_grammar_scoring.ipynb"><b>Notebook</b></a> &nbsp;·&nbsp;
+  <a href="https://techy-a.github.io/shl-grammar-scoring/report/"><b>Report</b></a> &nbsp;·&nbsp;
+  <a href="submissions/README.md"><b>Every submission</b></a> &nbsp;·&nbsp;
+  <a href="#reproducing-the-results"><b>Reproduce</b></a>
+</p>
 
-This repository is a solution to the **SHL Hiring Assessment 2026** Kaggle competition (`shl-hiring-assessment-2026`).
-The model listens to 45–60 s of spontaneous spoken English and predicts a **0–5 grammar score**.
+A solution to the **SHL Hiring Assessment 2026** Kaggle competition (`shl-hiring-assessment-2026`). Speech recognisers
+correct grammar by default ("he don't" becomes "he doesn't"), which removes the very errors this task scores. This
+model keeps them, and listens to how the answer was spoken as well as to what was said.
 
-| | |
-|---|---|
-| **Main model** (no tuning on the leaderboard) | **public 0.3178** (lower is better) |
-| **Training RMSE** (out-of-fold, speaker-grouped, test-length crops) | **0.500** |
-| **Training Pearson r** (out-of-fold) | **0.915** |
-| Public-tuned variants | light leaderboard calibration (weights fitted to public scores) reached 0.3116; not part of the method, see section 8 of the report below |
-| **Notebook + full report** | [`notebook/shl_grammar_scoring.ipynb`](notebook/shl_grammar_scoring.ipynb) |
-| **Report (web page)** | [techy-a.github.io/shl-grammar-scoring/report](https://techy-a.github.io/shl-grammar-scoring/report/) |
-| **Every submission, with its score** | [`submissions/README.md`](submissions/README.md) |
+<p align="center">
+  <img src="./assets/readme/results.svg" width="100%" alt="Main model, no leaderboard tuning: public score 0.3178, out-of-fold RMSE 0.500, out-of-fold Pearson r 0.915. The public score fell from 0.3463 to 0.3178 across versions; the biggest steps were test-length crops, removing a measured test bias, an audio language model and a fine-tuned text model.">
+</p>
 
----
+<sub>Public score = 0.6 × RMSE + 0.4 × (1 − Pearson), lower is better. A light public-tuned variant (weights fitted to
+public scores) reached 0.3116; it is not part of the method, see section 8 of the research report.</sub>
 
-## Approach
+## How it works
 
-```mermaid
-flowchart LR
-    A[audio clip] --> W[Whisper-large-v3-turbo<br/>verbatim prompt]
-    A --> E[WavLM · WavLM-large<br/>Whisper encoder]
-    W --> T2[DeBERTa-v3-large embeddings<br/>Ridge]
-    W --> FT[DeBERTa-v3-large<br/>fine-tuned regressor]
-    A --> V[Voxtral-Mini-3B<br/>audio language model]
-    E --> S[Ridge / SVR on<br/>pooled embeddings]
-    V --> S
-    V --> AP[attention pooling over<br/>cached frames, random crops]
-    E --> G{score-0 gate}
-    T2 & FT & S & AP --> B[three non-negative blends<br/>own weights for the 45 s batch<br/>averaged]
-    G --> B
-    B --> P[score 0–5<br/>minus 0.118 test bias<br/>full-length clips × 1.15]
-    P --> F[final: weighted average<br/>with five earlier submissions]
-```
+<p align="center">
+  <img src="./assets/readme/pipeline.svg" width="100%" alt="Each clip is read three ways: what was said (Whisper with a verbatim prompt, then DeBERTa-v3-large), how it was said (WavLM, WavLM-large and Whisper-encoder embeddings with ridge and SVR), and heard by a language model (Voxtral-Mini-3B with a ridge and an attention-pooling head). A non-negative blend with a score-0 gate and separate weights for the 45 s batch combines them, then a test bias is removed and full-length clips are stretched.">
+</p>
 
 - **What was said.** Whisper transcribes with a prompt full of fillers and mistakes, so it keeps the speaker's errors instead of correcting them. DeBERTa-v3-large reads the transcript, once frozen with a Ridge on top and once fine-tuned as a regressor.
 - **How it was said.** Frozen speech encoders capture fluency, rhythm and pronunciation. This turned out to be the strongest signal.
 - **Heard by a language model.** Voxtral-Mini-3B, an audio language model, listens to the clip directly, so it hears errors that the transcript may have smoothed over. Its hidden states, combined with the WavLM, WavLM-large and Whisper-encoder embeddings in one Ridge, are the best single model (CV RMSE 0.538). The idea of using an audio language model this way comes from another participant's public solution.
 - **Attention pooling over Voxtral's frames.** Voxtral's frame-level states are cached once per clip, and a small attention-pooling head learns which moments matter, training on a new random test-length crop of every clip in every epoch.
 - **Score-0 gate.** The WavLM model separates all 37 score-0 training clips perfectly (they are loud broadband noise with faint speech underneath, i.e. unusable recordings), so those clips are set to exactly 0.
-- **Final average.** The submission is a weighted average of the main model (0.494) and five earlier submissions, two of them calibration probes. The weights minimise the public error predicted from the files' public scores and their label-free differences (predicted 0.3110, scored 0.3116), so this last step is tuned to the public 60% of the test clips.
+- **Final average.** The submission is a weighted average of the main model (0.494) and five earlier submissions, two of them calibration probes (not published in this repository). The weights minimise the public error predicted from the files' public scores and their label-free differences (predicted 0.3110, scored 0.3116), so this last step is tuned to the public 60% of the test clips.
+
+## What I learned
+
+1. **Validation design beats architecture.** Speaker-grouped folds and test-length crops did more than any model.
+2. **The leaderboard is an instrument, not an oracle.** Probes measured the bias and decoded the metric, and the
+   averaging identity predicted scores before I spent submissions. Used naively, a 130-clip leaderboard mostly reports
+   noise.
+3. **Correlation with the target is not usefulness.** An LLM judge correlating 0.62 with the score added nothing,
+   while a weaker model whose errors differ from the ensemble's added the most. The number that matters is the
+   correlation with the current model's errors.
+4. **Procedure changes transfer, composition changes overfit.** Ten validation gains from reshuffling the blend failed
+   publicly; the gains that held came from changing how models were trained.
+5. **Bigger is not better with 769 labels.** A 24B audio model, a 7B LLM and nine seeds all lost to a small attention
+   head trained the right way.
+6. **Write everything down.** The log of failures is what made point 4 visible.
+
+## Reproducing the results
+
+**On Kaggle (easiest).** Attach the competition data and run the notebook on a 2× T4 GPU. It rebuilds everything from raw audio in about 3.5 hours and writes `submission.csv` (the final average also reads five earlier submission files from `submissions/`).
+
+**Locally.** Put the competition's `Dataset_Final/` under `data/`, then:
+
+```bash
+pip install -r requirements.txt
+jupyter notebook notebook/shl_grammar_scoring.ipynb
+```
+
+Locally the notebook reuses the cached `artifacts/`. To run the heavy steps on Kaggle from your machine, `bash kaggle/run_job.sh <job>` uploads `src/`, runs the job as a kernel, waits and downloads the outputs.
+
+**Checked on Kaggle.** A run of the notebook on Kaggle (CPU, from the saved GPU features) reproduces the submitted file with
+correlation 0.9999 (RMS difference 0.014). The small difference comes from the attention-pooling head, a neural network
+whose training does not follow exactly the same numerical path on a CPU as on a GPU; its out-of-fold RMSE was 0.571 there
+against 0.576 locally, and the ensemble's 0.506 against 0.500.
+
+> Note: GTX 16xx cards produce NaNs in fp16, so `common.py` switches them to fp32.
 
 ---
 
@@ -235,8 +257,8 @@ mix predictions landed within 0.0005 of the real score every time (0.3196 vs 0.3
 
 At this point I stepped back and reviewed the problem from four directions: the metric and leaderboard, the audio side,
 the text side, and the statistics of what could transfer. The conclusions were consistent. There was no honest metric
-trick left (probing the public bias of groups of test files would have gained a little publicly, cost about as much
-privately, and amounts to leaderboard gaming, so I did not do it). The largest remaining pool of error was the 45.06 s
+trick left: probing the public bias of groups of test files can lower the public score, but with about 130 public
+clips it mostly fits noise and should not carry over to the private clips, so it is kept out of the method. The largest remaining pool of error was the 45.06 s
 batch, where the blend's correlation with the labels was only 0.74 against 0.86 elsewhere. And frozen features from new
 models were probably exhausted: the next gain had to come from a change in how a model is trained.
 
@@ -304,22 +326,7 @@ matter.
 | Attention pooling on Voxtral frames | Which moments matter, trained on many crops | 0.58 on scored clips |
 | WavLM gate | Sets the noise recordings to 0 | catches all 37 |
 
-### 11. What I learned
-
-1. **Validation design beats architecture.** Speaker-grouped folds and test-length crops did more than any model.
-2. **The leaderboard is an instrument, not an oracle.** Probes measured the bias and decoded the metric, and the
-   averaging identity predicted scores before I spent submissions. Used naively, a 130-clip leaderboard mostly reports
-   noise.
-3. **Correlation with the target is not usefulness.** An LLM judge correlating 0.62 with the score added nothing,
-   while a weaker model whose errors differ from the ensemble's added the most. The number that matters is the
-   correlation with the current model's errors.
-4. **Procedure changes transfer, composition changes overfit.** Ten validation gains from reshuffling the blend failed
-   publicly; the gains that held came from changing how models were trained.
-5. **Bigger is not better with 769 labels.** A 24B audio model, a 7B LLM and nine seeds all lost to a small attention
-   head trained the right way.
-6. **Write everything down.** The log of failures is what made point 4 visible.
-
-### 12. Limitations and next steps
+### 11. Limitations and next steps
 
 - **Small data.** 769 clips and about 130 public test clips; differences under about 0.01 between similar models are
   mostly noise, and the private 40% will reshuffle close scores.
@@ -333,6 +340,8 @@ With more time I would try a head that reads the transcript and the audio frames
 more directly, and, outside a competition, collect more labelled data at the extreme scores. The notebook includes a
 fairness check by recording group; with demographic labels it should extend to gender, age and first language, which
 matters for any real assessment use.
+
+---
 
 ---
 
@@ -355,26 +364,6 @@ matters for any real assessment use.
 `src/common.py` holds paths and precision settings, so the same scripts run locally and on Kaggle. Each script caches
 its output in `artifacts/` for the next step. Scripts not in the table (`07`, `09`, `12`–`18`) are experiments described
 in the research report above and in `submissions/README.md`.
-
-## Reproducing the results
-
-**On Kaggle (easiest).** Attach the competition data and run the notebook on a 2× T4 GPU. It rebuilds everything from raw audio in about 3.5 hours and writes `submission.csv` (the final average also reads five earlier submission files from `submissions/`).
-
-**Locally.** Put the competition's `Dataset_Final/` under `data/`, then:
-
-```bash
-pip install -r requirements.txt
-jupyter notebook notebook/shl_grammar_scoring.ipynb
-```
-
-Locally the notebook reuses the cached `artifacts/`. To run the heavy steps on Kaggle from your machine, `bash kaggle/run_job.sh <job>` uploads `src/`, runs the job as a kernel, waits and downloads the outputs.
-
-**Checked on Kaggle.** A run of the notebook on Kaggle (CPU, from the saved GPU features) reproduces the submitted file with
-correlation 0.9999 (RMS difference 0.014). The small difference comes from the attention-pooling head, a neural network
-whose training does not follow exactly the same numerical path on a CPU as on a GPU; its out-of-fold RMSE was 0.571 there
-against 0.576 locally, and the ensemble's 0.506 against 0.500.
-
-> Note: GTX 16xx cards produce NaNs in fp16, so `common.py` switches them to fp32.
 
 ---
 
