@@ -3,18 +3,18 @@
   <desc id="desc">SHL Hiring Assessment 2026. A model that listens to 45 to 60 seconds of spontaneous spoken English and predicts the 0 to 5 grammar score a human rater would give. A plain speech recogniser writes "so he doesn't like it"; with a verbatim prompt the transcript keeps the spoken error "so he don't like it".</desc>
   <rect x="1" y="1" width="1198" height="418" rx="24" fill="#FBFAF7" stroke="#E6E2D9" stroke-width="2"/>
 
-  <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
-    <text x="64" y="94" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="2" fill="#C2410C">SHL HIRING ASSESSMENT 2026</text>
+  <g id="title-block" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <text x="64" y="94" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace" font-size="18" letter-spacing="2" fill="#C2410C">SHL HIRING ASSESSMENT 2026</text>
     <text x="64" y="166" font-size="62" font-weight="700" fill="#14171C">Spoken Grammar</text>
     <text x="64" y="234" font-size="62" font-weight="700" fill="#14171C">Scoring</text>
     <text x="64" y="288" font-size="23" fill="#4A4F57">Listens to 45–60 s of spontaneous English</text>
     <text x="64" y="320" font-size="23" fill="#4A4F57">and predicts the 0–5 grammar score a rater gives.</text>
-    <text x="64" y="370" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" fill="#6B6F76">Whisper · DeBERTa-v3 · WavLM · Voxtral-Mini-3B</text>
+    <text x="64" y="370" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace" font-size="18" fill="#6B6F76">Whisper · DeBERTa-v3 · WavLM · Voxtral-Mini-3B</text>
   </g>
 
   <g id="project-proof">
     <rect x="676" y="48" width="468" height="324" rx="18" fill="#FFFFFF" stroke="#E6E2D9" stroke-width="2"/>
-    <text x="708" y="86" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="16" letter-spacing="1.5" fill="#6B6F76">AUDIO · 16 kHz</text>
+    <text x="708" y="86" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace" font-size="16" letter-spacing="1.5" fill="#6B6F76">AUDIO · 16 kHz</text>
     <g fill="#1D4ED8" opacity="0.85">
             <rect x="706.0" y="127.0" width="4" height="10.0" rx="2"/>
       <rect x="712.0" y="125.8" width="4" height="12.4" rx="2"/>
@@ -87,7 +87,7 @@
     </g>
     <line x1="708" y1="186" x2="1112" y2="186" stroke="#EFECE6" stroke-width="2"/>
 
-    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace">
       <text x="708" y="222" font-size="16" letter-spacing="1.5" fill="#6B6F76">PLAIN SPEECH RECOGNITION</text>
       <text x="708" y="256" font-size="24" fill="#9A9EA6"><tspan x="708" textLength="70" lengthAdjust="spacingAndGlyphs">so he</tspan><tspan x="794" textLength="100" lengthAdjust="spacingAndGlyphs">doesn't</tspan><tspan x="910" textLength="98" lengthAdjust="spacingAndGlyphs">like it</tspan></text>
       <line x1="790" y1="248" x2="898" y2="248" stroke="#9A9EA6" stroke-width="2.5"/>
