@@ -1,0 +1,7 @@
+Job 1 records shuffled without combiner: 700
+Job 1 records shuffled with combiner   : 67  (4 map tasks)
+Combiner output identical to no-combiner output: YES
+reducer 0: 23 keys
+reducer 1: 19 keys
+reducer 2: 22 keys
+3-reducer output identical to 1-reducer output: YES

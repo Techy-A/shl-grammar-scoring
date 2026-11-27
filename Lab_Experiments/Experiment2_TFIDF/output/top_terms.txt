@@ -1,0 +1,15 @@
+doc1	blocks	tfidf=0.0567
+doc1	hdfs	tfidf=0.0567
+doc1	machines	tfidf=0.0567
+doc2	key	tfidf=0.0582
+doc2	mapreduce	tfidf=0.0388
+doc2	reducer	tfidf=0.0388
+doc3	python	tfidf=0.0567
+doc3	as	tfidf=0.0378
+doc3	lines	tfidf=0.0378
+doc4	documents	tfidf=0.0524
+doc4	a	tfidf=0.0398
+doc4	engine	tfidf=0.0349
+doc5	match	tfidf=0.0699
+doc5	cricket	tfidf=0.0466
+doc5	team	tfidf=0.0466

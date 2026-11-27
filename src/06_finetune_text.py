@@ -19,6 +19,9 @@ Two modes:
   ~600 texts than DeBERTa does.
   --crops (train on the test-length crop transcripts too, validate on them) and --drop-zero (train without the
   score-0 clips) add _crops / _nozero to the run name; --seed n adds _seed<n>; pass the same flags to --merge.
+  --dropout0 (every dropout in the backbone config set to 0; ELL 3rd place rated this high-impact for regression) and
+  --head bins (softmax over the 11 label bins 0, 0.5, ..., 5; the prediction is their expected value, still trained
+  with MSE on it and never rounded; Ma 2025) add _dropout0 / _bins.
 """
 import argparse
 
@@ -26,37 +29,46 @@ import numpy as np
 import pandas as pd
 import torch
 from torch import nn
-from transformers import AutoModel, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoConfig, AutoModel, AutoTokenizer, BitsAndBytesConfig
 
 from common import AMP, ART, DTYPE, finetune_fold, fold_of, merge_folds
 
 MODEL, TAG, NAME = "microsoft/deberta-v3-large", "prompt", "s4_deberta_ft"
 EPOCHS, LR, BS, MAX_LEN = 4, 1e-5, 8, 256
 LORA_LR = 1e-4   # LoRA adapters start at zero and need a larger step than full fine-tuning
+BINS = torch.linspace(0, 1, 11)   # --head bins: the label bins 0, 0.5, ..., 5 on the label / 5 target scale
 
 
 class Regressor(nn.Module):
-    def __init__(self, name, lora=False):
+    def __init__(self, name, lora=False, dropout0=False, bins=False):
         super().__init__()
-        self.lora = lora
+        self.lora, self.bins = lora, bins
+        # --dropout0: every dropout probability of the backbone config (hidden, attention, pooler, ...) set to 0
+        off = {k: 0.0 for k, v in AutoConfig.from_pretrained(name).to_dict().items()
+               if "dropout" in k and isinstance(v, float)} if dropout0 else {}
         if lora:   # 4-bit frozen body + trainable LoRA adapters (fp32) on every linear layer
             from peft import LoraConfig, get_peft_model
             q = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=DTYPE)
-            body = AutoModel.from_pretrained(name, dtype=DTYPE, quantization_config=q, device_map={"": 0})
+            body = AutoModel.from_pretrained(name, dtype=DTYPE, quantization_config=q, device_map={"": 0},
+                                             **off)
             body.enable_input_require_grads()   # gradient checkpointing needs grads flowing from the frozen embeddings
             self.body = get_peft_model(body, LoraConfig(r=16, lora_alpha=32, lora_dropout=0.05, target_modules="all-linear"))
         else:
             # fp32 master weights: transformers 5 otherwise keeps the checkpoint's dtype (fp16 for
             # DeBERTa-v3), and pure-fp16 training overflows to NaN. Autocast still runs fp16 math on T4.
-            self.body = AutoModel.from_pretrained(name, dtype=torch.float32)
-        self.head = nn.Linear(self.body.config.hidden_size, 1)
+            self.body = AutoModel.from_pretrained(name, dtype=torch.float32, **off)
+        self.head = nn.Linear(self.body.config.hidden_size, len(BINS) if bins else 1)
+
+    def score(self, z):   # pooled state -> score / 5: the linear output, or the expected value over the label bins
+        z = self.head(z)
+        return z.softmax(-1) @ BINS.to(z.device) if self.bins else z.squeeze(-1)
 
     def forward(self, x):   # x: dict with input_ids / attention_mask (right-padded)
         h = self.body(**x).last_hidden_state.float()
         if self.lora:   # last real token: a decoder's mean also averages its huge first-token activations
-            return self.head(h[torch.arange(len(h)), x["attention_mask"].sum(1) - 1]).squeeze(-1)
+            return self.score(h[torch.arange(len(h)), x["attention_mask"].sum(1) - 1])
         m = x["attention_mask"].unsqueeze(-1).float()
-        return self.head((h * m).sum(1) / m.sum(1)).squeeze(-1)   # mean over real tokens
+        return self.score((h * m).sum(1) / m.sum(1))   # mean over real tokens
 
 
 @torch.inference_mode()
@@ -71,7 +83,7 @@ def predict(model, enc, idx):
 
 
 def make_model():
-    model = Regressor(MODEL, LORA)
+    model = Regressor(MODEL, LORA, DROPOUT0, HEAD == "bins")
     (model.head if LORA else model).to("cuda")   # a 4-bit body is placed on the GPU when loaded and can't be moved
     model.body.gradient_checkpointing_enable()   # fits large in T4 memory
     # Small learning rate for the pretrained body (or the LoRA adapters), larger for the freshly initialised head.
@@ -80,7 +92,7 @@ def make_model():
 
 
 def main():
-    global MODEL, LORA   # --model / --lora replace them for make_model() and the tokenizer
+    global MODEL, LORA, DROPOUT0, HEAD   # the flags of the same names replace them for make_model() and the tokenizer
     ap = argparse.ArgumentParser()
     ap.add_argument("--folds", type=int, nargs="*", default=[0, 1, 2, 3, 4])
     ap.add_argument("--merge", action="store_true")
@@ -93,11 +105,17 @@ def main():
     ap.add_argument("--tag", default=TAG, help="transcripts_<tag>[_crops].parquet, e.g. phi4 (adds _<tag> to the name)")
     ap.add_argument("--lora", action="store_true", help="4-bit decoder LLM + LoRA adapters, last-token pooling")
     ap.add_argument("--seed", type=int, default=0, help="seed > 0: another run of the same recipe (adds _seed<n>)")
+    ap.add_argument("--dropout0", action="store_true", help="all backbone dropouts set to 0 (adds _dropout0)")
+    ap.add_argument("--head", choices=["linear", "bins"], default="linear",
+                    help="bins: softmax over the 11 label bins, predicting their expected value (adds _bins)")
     args = ap.parse_args()
     other = args.model != MODEL   # a non-default encoder gets its own run name, e.g. s4_roberta-large_ft
-    MODEL, LORA, short = args.model, args.lora, args.model.split("/")[-1]
+    MODEL, LORA, DROPOUT0, HEAD = args.model, args.lora, args.dropout0, args.head
+    short = args.model.split("/")[-1]
     prefix = "s4" + "c" * args.crops + "z" * args.drop_zero + f"_{short}" * other
     name = (f"s4_{short}_ft" if other else NAME) + "_crops" * args.crops + "_nozero" * args.drop_zero
+    extra = "_dropout0" * args.dropout0 + "_bins" * (args.head == "bins")
+    prefix, name = prefix + extra, name + extra
     if args.tag != TAG:
         prefix, name = prefix + f"_{args.tag}", name + f"_{args.tag}"
     if args.seed:   # seed runs are averaged later; the fine-tune alone is noisy (one run's OOF RMSE varies by fold luck)

@@ -1,0 +1,3 @@
+MapReduce is the processing model of Hadoop. The mapper reads the data and emits key value
+pairs. The reducer receives every value of one key and combines the values. MapReduce
+sends each key to one reducer.

@@ -1,0 +1,3 @@
+OverallAvgMin	92.1000
+TotalDurationMin	14736.00
+Visits	160

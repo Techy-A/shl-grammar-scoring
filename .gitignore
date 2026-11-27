@@ -2,6 +2,7 @@
 /*
 !/.gitignore
 !/README.md
+!/CLAUDE.md
 !/requirements.txt
 !/src/
 /src/__pycache__/
@@ -17,3 +18,7 @@
 !/report/
 !/assets/
 /kaggle/jobs/*/__pycache__/
+!/SmartCampus_MapReduce_Python/
+/SmartCampus_MapReduce_Python/**/__pycache__/
+!/Lab_Experiments/
+/Lab_Experiments/**/__pycache__/

@@ -1,0 +1,10 @@
+the	13
+and	8
+data	6
+key	4
+mapreduce	4
+task	4
+word	4
+count	3
+each	3
+map	3

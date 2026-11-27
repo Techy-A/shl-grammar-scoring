@@ -1,0 +1,3 @@
+Hadoop stores big data in HDFS. HDFS splits every file into blocks and stores the blocks
+on many machines. HDFS copies each block to three machines, so the blocks stay safe when
+one of the machines fails.

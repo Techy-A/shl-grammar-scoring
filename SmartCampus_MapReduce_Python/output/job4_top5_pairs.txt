@@ -1,0 +1,5 @@
+Burger|Juice	Transactions=42
+Coffee|Sandwich	Transactions=36
+Juice|Pasta	Transactions=33
+Samosa|Tea	Transactions=31
+Coffee|Muffin	Transactions=28
